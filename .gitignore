@@ -1,0 +1,30 @@
+# Python 缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.env
+.venv
+
+# 日志、数据、模型
+logs/
+*.log
+data/
+datasets/
+models/
+*.pth
+*.bin
+*.h5
+*.ckpt
+*.zip
+*.rar
+*.gz
+*.tar
+
+# 系统文件
+.DS_Store
+Thumbs.db

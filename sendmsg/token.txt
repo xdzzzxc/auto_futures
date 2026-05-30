@@ -1,0 +1,7 @@
+server酱：（完全免费，但每天最多5条消息）
+官网：https://sct.ftqq.com
+token:SCT346534TyKg5A0hH8gzZeJTGU4vfOOAa
+
+PushPlus:(注册支付了10元获得永久会员，每天至少可以推送200条以上消息到微信)
+官网：https://www.pushplus.plus/
+token:bc46270bcf1048c5908e1cbe3c34d89a
