@@ -142,7 +142,8 @@ def order():
     # history_data = fetch_future_data(ts_code=shared_data.ts_code)
     history_data = shared_data.history_data_analysis
     print(f'history_data: {history_data}')
-    print_context.print_context(f"预计交易价：{shared_data.open_price[ts_code]['open']+history_data['最小高开差']} - "
+    print(f'shared_data.open_price:{shared_data.open_price}')
+    print_context.print_context(f"预计交易价：{shared_data.open_price[ts_code]['open'] + history_data['最小高开差']} - "
                                 f"{shared_data.open_price[ts_code]['open'] - history_data['最小低开差']}")
     # 时段设置
     if is_night:
@@ -152,7 +153,7 @@ def order():
         start_time = datetime.strptime("09:00:00", "%H:%M:%S").time()
         end_time = datetime.strptime("15:15:00", "%H:%M:%S").time()
 
-    print(f"[{ts_code}]第一单条件时段：{start_time} ~ {end_time}")
+    print_context.print_context(f"[{ts_code}][夜场：{is_night}] 第一单下单交易时间段：{start_time} ~ {end_time}")
 
     # ========== 第一阶段交易循环 ==========
     while True:
@@ -162,7 +163,8 @@ def order():
 
         # 未到开始时间
         if current_time < start_time:
-            print(f"\r现在是非交易时间：{datetime.now().strftime('%H:%M:%S %A')}", flush=True, end="")
+            print(f"\r现在是非交易时间：{datetime.now().strftime('%H:%M:%S %A')},本期货品种的第一单交易开始时间是：{start_time}", flush=True, end="")
+            print("\n")
             sleep(1)
             continue
 

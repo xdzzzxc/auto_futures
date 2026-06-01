@@ -278,7 +278,7 @@ def _init_shared_data(user_type, target_days, lot_size):
     analysis_data, fut_data = fetch_future_data(ts_code=shared_data.ts_code)
     shared_data.history_data_analysis = analysis_data
     print_context(f'新浪历史数据： {shared_data.ts_code}-{shared_data.history_data_analysis}')
-    exit()
+    # exit()
     run_ths()
 
 
