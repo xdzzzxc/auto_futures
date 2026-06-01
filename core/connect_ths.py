@@ -54,7 +54,7 @@ def restart_ths():
     start_ths()
 
 
-def check_ths_status(keyword='happ'):
+def check_ths_status(keyword='happ'):  # noqa
     flag = False
     # 遍历所有进程，指定需要的字段
     for proc in psutil.process_iter(['name', 'pid', 'exe']):

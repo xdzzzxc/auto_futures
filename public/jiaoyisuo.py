@@ -172,7 +172,7 @@ def get_future_info(symbol: str) -> Dict[str, Any] | None:
     info_dict.update(d)
     is_night = not(code in FUTURES_NO_NIGHT)
     info_dict["night_trading"] = is_night
-    print(info_dict)
+    # print(info_dict)
     return info_dict
 
 

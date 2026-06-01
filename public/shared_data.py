@@ -56,7 +56,7 @@ start_trade_date = None  # 期货开始交易时间（下单日期）
 # ===================== 核心函数 =====================
 def is_trade_statue() -> bool:
     """
-    判断是否持仓：权益 != 可用资金 → 有持仓
+    判断是否持仓或是否在交易状态中：权益 != 可用资金 → 有持仓、交易中、返回True
     返回：True=有持仓 / False=无持仓
     """
     valid_chars = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "-"}
@@ -74,8 +74,8 @@ def is_trade_statue() -> bool:
             s = "".join(c for c in text if c in valid_chars)
             return float(s) if s else 0.0
 
-        equity = get_num(equity_text)
-        available = get_num(available_text)
+        equity = get_num(equity_text)  # 权益资金即用户总资金
+        available = get_num(available_text)  # 可用资金（如果在交易中则可用资金就会小于总资金）
 
         # 差异 > 1 元判定为有持仓
         return abs(equity - available) > 1.0
@@ -84,7 +84,7 @@ def is_trade_statue() -> bool:
         return False
 
 
-def trade_flag() -> bool:
+def trade_flag() -> bool:  # 判断是否在合法的交易时间段内
     now = datetime.now()
     hour = now.hour
     minute = now.minute

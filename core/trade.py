@@ -1,7 +1,7 @@
 from time import sleep
 from datetime import datetime, timedelta
 from collections import deque
-from public.jiaoyisuo import get_future_info as get_info
+from public.jiaoyisuo import get_future_info as get_info  # ===================
 from public import shared_data, print_context
 from sendmsg.weichat_push import send_msg
 from public.jiaoyisuo import get_future_info
@@ -16,7 +16,7 @@ def auto_trade():
     shared_data.trade_window.maximize()
     shared_data.trade_window.set_focus()
     controls = shared_data.ths_common_control
-    order_params = shared_data.trade_menu_dict
+    order_params = shared_data.trade_menu_dict  # 获取定单参数表
     sleep(0.5)
 
     # 买多 / 卖空
@@ -148,10 +148,10 @@ def order():
     # 时段设置
     if is_night:
         start_time = datetime.strptime("21:00:00", "%H:%M:%S").time()
-        end_time = datetime.strptime("22:00:00", "%H:%M:%S").time()
+        end_time = datetime.strptime("21:30:00", "%H:%M:%S").time()
     else:
         start_time = datetime.strptime("09:00:00", "%H:%M:%S").time()
-        end_time = datetime.strptime("15:15:00", "%H:%M:%S").time()
+        end_time = datetime.strptime("09:30:00", "%H:%M:%S").time()
 
     print_context.print_context(f"[{ts_code}][夜场：{is_night}] 第一单下单交易时间段：{start_time} ~ {end_time}")
 
@@ -164,7 +164,7 @@ def order():
         # 未到开始时间
         if current_time < start_time:
             print(f"\r现在是非交易时间：{datetime.now().strftime('%H:%M:%S %A')},本期货品种的第一单交易开始时间是：{start_time}", flush=True, end="")
-            print("\n")
+
             sleep(1)
             continue
 
@@ -183,15 +183,15 @@ def order():
         # 条件判断
         condition_met = False
         target_profit = 0.0
-
+        # 根据当前即时价格确定是否下单交易
         if shared_data.direction == "Rise" and not is_trade_statue():
-            target = open_price + history_data.get("最小高开差", 0)
+            target = open_price + history_data.get("最小高开差", 0)  # 设置买多时的最高价位
             if current_price <= target:
                 condition_met = True
                 target_profit = open_price + history_data.get("最大高开差", 0)
 
         elif shared_data.direction == "Fall" and not is_trade_statue():
-            target = open_price - history_data.get("最小低开差", 0)
+            target = open_price - history_data.get("最小低开差", 0)  # 设置卖空时的最小价位
             if current_price >= target:
                 condition_met = True
                 target_profit = open_price - history_data.get("最大低开差", 0)
@@ -213,7 +213,7 @@ def order():
             with shared_data.dict_lock:
                 shared_data.trade_menu_dict.update({
                     "品种": ts_code,
-                    "交易时间": datetime.now().strftime("%H:%M:%S"),
+                    "定参时间": datetime.now().strftime("%H:%M:%S"),
                     "交易方向": shared_data.direction,
                     "交易价": current_price,
                     "止盈价": target_profit,
@@ -222,13 +222,19 @@ def order():
                     "预亏损": -(profit * 1.5)
                 })
 
-            auto_trade()
+            auto_trade()  # 下单交易函数
             send_msg(shared_data.trade_menu_dict)
-            print_context.print_context(f"下单完成：{shared_data.trade_menu_dict}")
+            print_context.print_context(f"成功下单交易[{datetime.now().strftime('%Y%m%d %H:%M:%s')}]，具体参数如下：\n"
+                                        f"{shared_data.trade_menu_dict}")
             continue
+    print_context.print_context(f"目前已过第一阶段交易时间，正在进入第二阶段交易时间段，请注意下单交易！"
+                                f"[{datetime.now().strftime('%H:%M:%S')}]")
 
     # ========== 第二阶段（预留） ==========
     while True:
+        with shared_data.deque_lock:  # 通过进程锁deque_lock读取期货品种的即时价格deque_price
+            deque = shared_data.cur_price_deque
+            print(f'\r{deque}', flush=True, end="")
         # 这里你以后写逻辑
         sleep(1)
 

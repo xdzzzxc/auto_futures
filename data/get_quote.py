@@ -26,10 +26,10 @@ def get_open_price():
     current_hour = now.hour
     cache_folder = os.path.join(os.getcwd(), "futures_data")
     os.makedirs(cache_folder, exist_ok=True)
-    print_context.print_context(f"cache folder : {cache_folder}")
+    # print_context.print_context(f"cache folder : {cache_folder}")
     # 目标品种（只处理这一个）
     target_code = shared_data.ts_code.strip()
-    print_context.print_context(f"target_code:{target_code}")
+    # print_context.print_context(f"target_code:{target_code}")
 
     # ==================== 第一步：清理2天前的所有缓存文件 ====================
     print("\r正在清理2天前的缓存文件...", flush=True, end="")
@@ -43,7 +43,7 @@ def get_open_price():
                     os.remove(file_path)
             except:
                 continue
-    print("\r缓存清理完成 ✅\n")
+    # print("\r缓存清理完成 ✅\n")
 
     # ==================== 第二步：优先从本地文件夹查找当前品种的所有有效文件 ====================
     result_data = {}
@@ -52,7 +52,7 @@ def get_open_price():
     for filename in os.listdir(cache_folder):
         # 只匹配当前品种 + 正确后缀的文件
         if filename.startswith(f"{target_code}_") and filename.endswith("_openprice.json"):
-            print(filename, flush=True, end="")
+            # print(filename, flush=True, end="")
             sleep(2)
 
             try:

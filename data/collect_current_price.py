@@ -59,7 +59,7 @@ def get_current_price(ts_code=None):
             with shared_data.deque_lock:
                 shared_data.cur_price_deque.append((date_inner, price_text))
 
-        except Exception as e:
+        except Exception as e:  # noqa
             # 读取失败不崩溃，跳过即可
             # print_context(f"价格读取异常：{str(e)}")
             sleep(1)

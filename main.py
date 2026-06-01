@@ -268,7 +268,7 @@ def _init_shared_data(user_type, target_days, lot_size):
     shared_data.logger = setup_trade_loggers()
     select_future()
     ts_code = shared_data.ts_code
-    print_context(f"您已选择的期货品种： {ts_code}")
+    # print_context(f"您已选择的期货品种： {ts_code}")
     shared_data.target_days = target_days
     shared_data.lot_size = lot_size
     prefix = re.match(r'[a-zA-Z]+', ts_code).group()
@@ -277,7 +277,7 @@ def _init_shared_data(user_type, target_days, lot_size):
     # 加入新浪历史交易数据
     analysis_data, fut_data = fetch_future_data(ts_code=shared_data.ts_code)
     shared_data.history_data_analysis = analysis_data
-    print_context(f'新浪历史数据： {shared_data.ts_code}-{shared_data.history_data_analysis}')
+    print_context(f'新浪网历史数据 - 期货交易品种 >>> {shared_data.ts_code}\n{shared_data.history_data_analysis}')
     # exit()
     run_ths()
 
