@@ -6,7 +6,8 @@ import random
 import os
 from public.print_context import print_context
 import psutil
-from core.close_ad_window import close_ad_windows
+# from core.close_ad_window import close_ad_windows
+from public.close_ad_window import close_ad_windows
 from public import shared_data
 ths_path = r"C:\同花顺期货通\bin\hexinlauncher.exe"
 

@@ -18,20 +18,23 @@ def auto_trade():
     controls = shared_data.ths_common_control
     order_params = shared_data.trade_menu_dict  # 获取定单参数表
     sleep(0.5)
-
+    current_time = datetime.now().time()
     # 买多 / 卖空
     if order_params.get('交易方向') == "Rise":
         click_position(controls["买多"][1])
     else:
         click_position(controls["卖空"][1])
-
+    if current_time.hour >= shared_data.first_start_time.hour:
+        shared_data.first_end_time[0] = current_time
+    else:
+        shared_data.first_end_time[1] = current_time
     print_context.print_context(f"程序已成功下单，正在交易中......[{order_params['交易方向']}]")
 
 
 def monitor_profit_loss():
     """监视动态价格变化，完成自动平仓"""
     print_context.print_context(f'交易状态动态监控中 ......')
-    print(f"order_param_dict:{shared_data.order_param_dict}\nhistory_data_analysis:{shared_data.history_data_analysis}"
+    print_context.print_context(f"order_param_dict:{shared_data.order_param_dict}\nhistory_data_analysis:{shared_data.history_data_analysis}"
           f"\ntrade_menu_dict:{shared_data.trade_menu_dict}")
     no_print = True  # 只打印一次防止刷屏
     while True:
@@ -97,7 +100,7 @@ def monitor_profit_loss():
 def calculate_profit_loss(future_code: str, direction: str,
                           trade_price: float | int,
                           profit_price: float | int):
-    """计算盈亏与止损价"""
+    """计算盈亏与止损价 —— 已修复止损价异常问题"""
     future_info = get_future_info(future_code) or {}
     try:
         commission = future_info["commission"]
@@ -114,23 +117,27 @@ def calculate_profit_loss(future_code: str, direction: str,
     if direction == "Rise":
         profit = (profit_price - trade_price) / min_price_change * on_tick_profit - commission_value
         profit_diff = profit_price - trade_price
-        loss_price = trade_price - profit_diff * 1.5
+        # ===================== 修复：买多止损价应该在交易价下方，不会出现负数 =====================
+        loss_price = trade_price - abs(profit_diff) * 1.5
 
     elif direction == "Fall":
         profit = (trade_price - profit_price) / min_price_change * on_tick_profit - commission_value
         profit_diff = trade_price - profit_price
-        loss_price = trade_price + profit_diff * 1.5
+        # ===================== 修复：卖空止损价应该在交易价上方，不会飞上天 =====================
+        loss_price = trade_price + abs(profit_diff) * 1.5
 
     elif direction == "Sideways":
         if trade_price > profit_price:
             profit = (trade_price - profit_price) / min_price_change * on_tick_profit - commission_value
             profit_diff = trade_price - profit_price
-            loss_price = trade_price + profit_diff * 1.5
+            loss_price = trade_price + abs(profit_diff) * 1.5
         else:
             profit = (profit_price - trade_price) / min_price_change * on_tick_profit - commission_value
             profit_diff = profit_price - trade_price
-            loss_price = trade_price - profit_diff * 1.5
+            loss_price = trade_price - abs(profit_diff) * 1.5
 
+    # ===================== 安全保护：止损价永远 > 0 =====================
+    loss_price = max(loss_price, 1.0)
     return profit, loss_price
 
 
@@ -143,15 +150,15 @@ def order():
     history_data = shared_data.history_data_analysis
     print(f'history_data: {history_data}')
     print(f'shared_data.open_price:{shared_data.open_price}')
-    print_context.print_context(f"预计交易价：{shared_data.open_price[ts_code]['open'] + history_data['最小高开差']} - "
-                                f"{shared_data.open_price[ts_code]['open'] - history_data['最小低开差']}")
+    print_context.print_context(f"预计交易价：{shared_data.open_price[ts_code]['open']} + {history_data['最小高开差']} - "
+                                f"{shared_data.open_price[ts_code]['open']} - {history_data['最小低开差']}")
     # 时段设置
     if is_night:
         start_time = datetime.strptime("21:00:00", "%H:%M:%S").time()
         end_time = datetime.strptime("21:30:00", "%H:%M:%S").time()
     else:
-        start_time = datetime.strptime("09:00:00", "%H:%M:%S").time()
-        end_time = datetime.strptime("09:30:00", "%H:%M:%S").time()
+        start_time = datetime.strptime("9:00:00", "%H:%M:%S").time()
+        end_time = datetime.strptime("9:30:00", "%H:%M:%S").time()
 
     print_context.print_context(f"[{ts_code}][夜场：{is_night}] 第一单下单交易时间段：{start_time} ~ {end_time}")
 
@@ -159,13 +166,15 @@ def order():
     while True:
         current_time = datetime.now().time()
         if current_time >= end_time:
+            print_context.print_context("已过第一阶段的交易时间，程序自动切换到第二阶段交易市场。")
             break
 
         # 未到开始时间
         if current_time < start_time:
-            print(f"\r现在是非交易时间：{datetime.now().strftime('%H:%M:%S %A')},本期货品种的第一单交易开始时间是：{start_time}", flush=True, end="")
+            print(f"\r现在不是第一阶段的合法交易时间：{datetime.now().strftime('%H:%M:%S %A')},"
+                  f"正常交易时间段：{start_time}-{end_time}", flush=True, end="")
 
-            sleep(1)
+            sleep(0.5)
             continue
 
         print(f"\r正在等待条件成立后下单 ······ ", flush=True, end='')
@@ -224,10 +233,12 @@ def order():
 
             auto_trade()  # 下单交易函数
             send_msg(shared_data.trade_menu_dict)
-            print_context.print_context(f"成功下单交易[{datetime.now().strftime('%Y%m%d %H:%M:%s')}]，具体参数如下：\n"
+            # ===================== 修复：%s → %S 时间格式化错误 =====================
+            print_context.print_context(f"成功下单交易[{datetime.now().strftime('%Y%m%d %H:%M:%S')}]，具体参数如下：\n"
                                         f"{shared_data.trade_menu_dict}")
-            continue
-    print_context.print_context(f"目前已过第一阶段交易时间，正在进入第二阶段交易时间段，请注意下单交易！"
+            break  # 第一阶段只下一个订单，一旦成功就跳出第一阶段进入第二阶段市场交易
+
+    print_context.print_context(f"目前已过第一阶段交易时间，正在进入第二阶段交易市场，请注意下单交易！"
                                 f"[{datetime.now().strftime('%H:%M:%S')}]")
 
     # ========== 第二阶段（预留） ==========
@@ -236,7 +247,7 @@ def order():
             deque = shared_data.cur_price_deque
             print(f'\r{deque}', flush=True, end="")
         # 这里你以后写逻辑
-        sleep(1)
+        sleep(20)
 
 
 # ===================== 启动 =====================

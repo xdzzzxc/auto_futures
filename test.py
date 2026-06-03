@@ -1,144 +1,132 @@
-"""
-本模块利用akshare从新浪网获取期货商品的交易数据；
-通过分析数据自定义该期货品种的交易参数，并将其传递到公共模块变量：shared_data.order_param_dict
-交易参数主要是多、空两个方向
-"""
 import os
-from datetime import datetime
-from functools import lru_cache
+import random
+from time import sleep
 import akshare as ak
 import pandas as pd
-from data.get_quote import get_open_price
-from public.jiaoyisuo import futures_info
-from public import shared_data
 import numpy as np
+from public import shared_data
 from public.print_context import print_context
 
-# 将列标题转换成英文标题
-zh_en_dict = {"日期": "trade_date", "开盘价": "open", "最高价": "high", "最低价": "low", "收盘价": "close",
-              "成交量": "volume", "动态结算价": "settle_price",
-              "持仓量": "open_interest", "结算价": "settle_price", "极值差": "extreme_diff",
-              "标准差": "standard_deviation", "高开差": "high_open_diff", "低开差": "low_open_diff",
-              "走势": "trend"}
-# print({v: k for k, v in zh_en_dict.items()})
-en_zh_dict = {'trade_date': '日期', 'open': '开盘价', 'high': '最高价', 'low': '最低价', 'close': '收盘价',
-              'volume': '成交量', 'settle_price': '结算价', 'open_interest': '持仓量',
-              'extreme_diff': '极值差', 'standard_deviation': '标准差',
-              'high_open_diff': '高开差', 'low_open_diff': '低开差', 'trend': '走势'}
-
 def setup_pandas_display():
-    # 核心对齐配置
-    pd.set_option('display.unicode.ambiguous_as_wide', True)  # 处理模糊字符宽度
-    pd.set_option('display.unicode.east_asian_width', True)   # 处理中文字符宽度
-    # 其他优化配置
+    pd.set_option('display.max_rows', None)
+    pd.set_option('display.max_columns', None)
+    pd.set_option('display.width', 10000)
+    pd.set_option('display.max_colwidth', 10000)
     pd.set_option('display.unicode.ambiguous_as_wide', True)
-    pd.set_option('display.max_columns', None)                # 显示所有列
-    pd.set_option('display.width', None)                      # 自动适配宽度
-    pd.set_option('display.max_colwidth', None)               # 列宽不截断
-    pd.set_option('display.float_format', '{:.2f}'.format)    # 浮点数统一保留1位小数（可选）
+    pd.set_option('display.unicode.east_asian_width', True)
+    pd.set_option('display.float_format', '{:.2f}'.format)
+    pd.set_option('display.expand_frame_repr', False)
 
 setup_pandas_display()
 
+# ---------------------- 核心函数：1分钟K自动计算策略信号 ----------------------
+def collect_current_price(ts_code=None):
+    if ts_code is None or str(ts_code).strip() == "":
+        print_context("❌ 请输入合法合约代码，如 m2609")
+        return
 
-def fetch_future_data(ts_code=None):
-    # ts_code = shared_data.ts_code if ts_code is None else ts_code
-    today = datetime.now().strftime("%Y%m%d")
-    cache_folder = os.path.join(os.getcwd(), "futures_data\\sina_data")
-    cache_file = os.path.join(cache_folder, f"{today}_open_price.pkl")
+    # 合约优先级
+    run_ts = shared_data.ts_code if shared_data.ts_code else ts_code
+
+    today = pd.Timestamp.now().strftime("%Y%m%d")
+    cache_folder = os.path.join(os.getcwd(), "futures_data", "sina_data")
     os.makedirs(cache_folder, exist_ok=True)
-    # ==================== 清理旧json：只保留今天的缓存文件 ====================
-    for filename in os.listdir(cache_folder):
-        file_path = os.path.join(cache_folder, filename)
-        if os.path.isfile(file_path):
-            # 只清理 .pkl 文件
-            if filename.endswith(".pkl"):
-                # 如果文件名里 不包含 今天日期 → 删掉
-                if today not in filename:
-                    try:
-                        os.remove(file_path)
-                        # print_context(f"已清理旧缓存：{filename}")
-                    except Exception as e:
-                        print_context(f"清理失败 {filename}：{str(e)}")
-    print_context("已清理所有过期缓存！")
-    # 读取或拉取数据
-    if os.path.exists(cache_file):
-        print_context(f"从本地加载数据：{cache_file}")
-        sina_fut_data = pd.read_pickle(cache_file)
-    else:
-        print_context("从新浪获取数据...")
-        days = shared_data.target_days
-        sina_fut_data = ak.futures_main_sina(ts_code)
+    min_cache_path = os.path.join(cache_folder, f"{run_ts}_{today}_min.pkl")
 
-        # 转英文（内部计算用）
-        sina_fut_data.rename(columns=zh_en_dict, inplace=True)
+    last_k_time = None
+    print_context(f"✅ 启动 {run_ts} 1分钟实时行情监听")
 
-        # 日期处理
-        sina_fut_data["trade_date"] = pd.to_datetime(sina_fut_data["trade_date"], errors="coerce")
-        sina_fut_data.dropna(subset=["trade_date"], inplace=True)
+    while True:
+        try:
+            # 拉取1分钟数据
+            df_raw = ak.futures_zh_minute_sina(symbol=run_ts, period="1")
+            if df_raw.empty:
+                print_context("⚠️ 数据为空，休眠8秒")
+                sleep(8)
+                continue
 
-        # 计算
-        sina_fut_data["extreme_diff"] = sina_fut_data["high"] - sina_fut_data["low"]
-        sina_fut_data["high_open_diff"] = sina_fut_data["high"] - sina_fut_data["open"]
-        sina_fut_data["low_open_diff"] = sina_fut_data["open"] - sina_fut_data["low"]
-        sina_fut_data["trend"] = np.sign(sina_fut_data["close"] - sina_fut_data["open"])
+            df_raw["datetime"] = pd.to_datetime(df_raw["datetime"])
 
-        # 排序
-        sina_fut_data.sort_values("trade_date", ascending=False, inplace=True)
-        fut_data = sina_fut_data.head(days).reset_index(drop=True)
-        fut_data["trade_date"] = fut_data["trade_date"].dt.strftime("%Y%m%d")
+            # 增量缓存
+            if os.path.exists(min_cache_path):
+                df_old = pd.read_pickle(min_cache_path)
+                df_all = pd.concat([df_old, df_raw]).drop_duplicates(subset=["datetime"]).sort_values("datetime").reset_index(drop=True)
+            else:
+                df_all = df_raw.copy()
+            df_all.to_pickle(min_cache_path)
 
-        # 保存缓存
-        fut_data.to_pickle(cache_file)
+            latest_dt = df_all["datetime"].iloc[-1]
+            if latest_dt == last_k_time:
+                sleep(random.uniform(2.2, 3.8))
+                continue
+            last_k_time = latest_dt
 
-    # ==============================================
-    # 这里统一转回中文！！！（修复点）
-    # ==============================================
-    sina_fut_data = sina_fut_data.rename(columns=en_zh_dict)
+            # ===================== 自动计算日内指标 =====================
+            day_high = round(df_all["high"].max(), 0)
+            day_low  = round(df_all["low"].min(), 0)
+            now_close = df_all["close"].iloc[-1]
+            avg_cost  = round(df_all["close"].mean(), 0)
 
-    # 下面所有计算都不变（满足你的需求）
-    max_range = round(sina_fut_data['极值差'].max())
-    min_range = round(sina_fut_data['极值差'].min())
-    avg_range = round(sina_fut_data['极值差'].mean())
-    range_std = round(sina_fut_data['极值差'].std())
+            # 成交量过滤
+            vol_5 = df_all["volume"].tail(5).mean()
+            curr_vol = df_all["volume"].iloc[-1]
 
-    support = round(sina_fut_data['最低价'].mean())
-    resistance = round(sina_fut_data['最高价'].mean())
-    settle_price = sina_fut_data['结算价'].iloc[0]
+            # 持仓变化
+            hold_now = df_all["hold"].iloc[-1]
+            hold_pre = df_all["hold"].iloc[-2] if len(df_all) >=2 else hold_now
 
-    max_gap_up = round(sina_fut_data['高开差'].max())
-    min_gap_up = round(sina_fut_data['高开差'].min())
-    avg_gap_up = round(sina_fut_data['高开差'].mean())
+            # ===================== 自动开仓信号 =====================
+            enable_long = False
+            enable_short = False
+            tick = 1
 
-    max_gap_down = round(sina_fut_data['低开差'].max())
-    min_gap_down = round(sina_fut_data['低开差'].min())
-    avg_gap_down = round(sina_fut_data['低开差'].mean())
+            # 做多信号：靠近支撑 + 缩量止跌
+            if abs(now_close - day_low) <= tick and curr_vol < vol_5 * 0.8:
+                enable_long = True
 
-    cv = round(range_std / avg_range, 2) if avg_range != 0 else 0
-    if cv < 0.2:
-        stability = f"极稳定-{cv}"
-    elif cv < 0.45:
-        stability = f"稳定-{cv}"
-    elif cv < 0.6:
-        stability = f"较稳定-{cv}"
-    elif cv < 0.8:
-        stability = f"不稳定-{cv}"
-    else:
-        stability = f"极不稳定-{cv}"
+            # 做空信号：靠近压力 + 缩量滞涨
+            if abs(now_close - day_high) <= tick and curr_vol < vol_5 * 0.8:
+                enable_short = True
 
-    result = {
-        "压力位": resistance, "支撑位": support, "最大波动": max_range, "平均波动": avg_range,
-        "最小波动": min_range, "最大高开差": max_gap_up, "最小高开差": min_gap_up,
-        "平均高开差": avg_gap_up, "最大低开差": max_gap_down, "最小低开差": min_gap_down,
-        "平均低开差": avg_gap_down, "前日结算价": settle_price, "标准差": range_std, "稳定性": stability
-    }
+            # 自适应止损止盈（不依赖历史数据，直接用日内波动）
+            day_range = day_high - day_low
+            if day_range < 5:
+                day_range = 10
+            base_stop = int(day_range * 0.35)
+            base_tp = int(day_range * 0.8)
 
-    shared_data.history_data_analysis = result
-    shared_data.history_trade_df = sina_fut_data
+            # 多空点位
+            long_entry = day_low + tick
+            long_stop  = day_low - base_stop
+            long_tp    = day_high - tick
 
-    return result, sina_fut_data  # 现在返回的就是中文列名！
+            short_entry = day_high - tick
+            short_stop  = day_high + base_stop
+            short_tp    = day_low + tick
 
+            # ===================== 写入公共下单参数 =====================
+            shared_data.order_param_dict = {
+                "合约代码": run_ts,
+                "现价": now_close,
+                "压力": day_high,
+                "支撑": day_low,
+                "均价": avg_cost,
+                "可开多": enable_long,
+                "可开空": enable_short,
+                "多头": {"开仓": long_entry, "止损": long_stop, "止盈": long_tp},
+                "空头": {"开仓": short_entry, "止损": short_stop, "止盈": short_tp},
+            }
 
+            # 实时输出
+            print(f"【{latest_dt}】现价={now_close} 压力={day_high} 支撑={day_low} 可多={enable_long} 可空={enable_short}")
+
+            sleep(random.uniform(2.2, 3.8))
+
+        except Exception as err:
+            print_context(f"❌ 错误：{str(err)}")
+            sleep(10)
+
+# ------------------- 测试入口 -------------------
 if __name__ == "__main__":
-    result_dict, fut_data = fetch_future_data("c2609")
-    print(f'传入shared_data.history_data_analysis:\n{result_dict}\n'
-          f'传入shared_trade_df:\n{fut_data}')
+    shared_data.ts_code = "m2609"  # 必须赋值
+    collect_current_price(ts_code="m2609")

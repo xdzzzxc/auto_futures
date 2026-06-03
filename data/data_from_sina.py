@@ -121,8 +121,8 @@ def fetch_future_data(ts_code=None):
     avg_range = round(fut_data['极值差'].mean())
     range_std = round(fut_data['极值差'].std())
 
-    support = round(fut_data['最低价'].mean())
-    resistance = round(fut_data['最高价'].mean())
+    support = round(fut_data['最低价'].min())
+    resistance = round(fut_data['最高价'].max())
     settle_price = fut_data['结算价'].iloc[0]
 
     max_gap_up = round(fut_data['高开差'].max())
