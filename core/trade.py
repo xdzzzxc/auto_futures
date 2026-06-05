@@ -24,18 +24,24 @@ def auto_trade():
         click_position(controls["买多"][1])
     else:
         click_position(controls["卖空"][1])
-    if current_time.hour >= shared_data.first_start_time.hour:
-        shared_data.first_end_time[0] = current_time
-    else:
-        shared_data.first_end_time[1] = current_time
+
     print_context.print_context(f"程序已成功下单，正在交易中......[{order_params['交易方向']}]")
 
 
 def monitor_profit_loss():
     """监视动态价格变化，完成自动平仓"""
     print_context.print_context(f'交易状态动态监控中 ......')
-    print_context.print_context(f"order_param_dict:{shared_data.order_param_dict}\nhistory_data_analysis:{shared_data.history_data_analysis}"
-          f"\ntrade_menu_dict:{shared_data.trade_menu_dict}")
+    if shared_data.order_param_dict:
+        print(f"[{shared_data.ts_code}]下单参数：\n{shared_data.order_param_dict}")
+
+    if shared_data.history_data_analysis:
+        print(f"[{shared_data.ts_code}]新浪历史交易数据分析：\n{shared_data.history_data_analysis}")
+    if shared_data.open_price:
+        print(f"[{shared_data.ts_code}]今日开盘信息[东财网]:\n{shared_data.open_price}")
+    # print_context.print_context(f"order_param_dict:{shared_data.order_param_dict}\nhistory_data_analysis:{shared_data.history_data_analysis}"
+    #       f"\ntrade_menu_dict:{shared_data.trade_menu_dict}")
+    if shared_data.trade_menu_dict:
+        print(f"程序已自动下单，成交参数：{shared_data.trade_menu_dict}\n{'=^='*40}")
     no_print = True  # 只打印一次防止刷屏
     while True:
         # ============== 无持仓直接跳过 ==============
@@ -148,10 +154,11 @@ def order():
     is_night = ts_code_dict.get("night_trading", False) if ts_code_dict else False
     # history_data = fetch_future_data(ts_code=shared_data.ts_code)
     history_data = shared_data.history_data_analysis
-    print(f'history_data: {history_data}')
-    print(f'shared_data.open_price:{shared_data.open_price}')
-    print_context.print_context(f"预计交易价：{shared_data.open_price[ts_code]['open']} + {history_data['最小高开差']} - "
-                                f"{shared_data.open_price[ts_code]['open']} - {history_data['最小低开差']}")
+    # print(f'history_data: {history_data}')
+    # print(f'shared_data.open_price:{shared_data.open_price}')
+    print_context.print_context(f"预计开市第一单交易区域价：{shared_data.open_price[ts_code]['open'] + history_data['最小高开差']} | "
+                                f"{shared_data.open_price[ts_code]['open'] - history_data['最小低开差']}")
+
     # 时段设置
     if is_night:
         start_time = datetime.strptime("21:00:00", "%H:%M:%S").time()
@@ -236,6 +243,7 @@ def order():
             # ===================== 修复：%s → %S 时间格式化错误 =====================
             print_context.print_context(f"成功下单交易[{datetime.now().strftime('%Y%m%d %H:%M:%S')}]，具体参数如下：\n"
                                         f"{shared_data.trade_menu_dict}")
+            print('期货开市第一阶段交易结束！')
             break  # 第一阶段只下一个订单，一旦成功就跳出第一阶段进入第二阶段市场交易
 
     print_context.print_context(f"目前已过第一阶段交易时间，正在进入第二阶段交易市场，请注意下单交易！"
@@ -247,7 +255,7 @@ def order():
             deque = shared_data.cur_price_deque
             print(f'\r{deque}', flush=True, end="")
         # 这里你以后写逻辑
-        sleep(20)
+        sleep(5)
 
 
 # ===================== 启动 =====================

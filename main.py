@@ -76,8 +76,8 @@ def get_direction(title="交易方向", msg=None) -> str | None:
     ttk.Button(btn_frame, text="取消", command=cancel, width=6).pack(side=tk.LEFT)
 
     root.mainloop()
-    print_context(f"今天期货交易参数列表：\n期货品种：{shared_data.ts_code}, \n交易方向：{shared_data.direction}\n"
-                  f"今日开盘：{shared_data.open_price}\n等待程序启动同花顺期货通 ······")
+    # print_context(f"今天期货交易参数列表：\n期货品种：{shared_data.ts_code}, \n交易方向：{shared_data.direction}\n"
+    #               f"今日开盘：{shared_data.open_price}\n等待程序启动同花顺期货通 ······")
     return result
 
 
@@ -277,7 +277,7 @@ def _init_shared_data(user_type, target_days, lot_size):
     # 加入新浪历史交易数据
     analysis_data, fut_data = fetch_future_data(ts_code=shared_data.ts_code)
     shared_data.history_data_analysis = analysis_data
-    print_context(f'新浪网历史数据 - 期货交易品种 >>> {shared_data.ts_code}\n{shared_data.history_data_analysis}')
+    # print_context(f'新浪网历史数据 - 期货交易品种 >>> {shared_data.ts_code}\n{shared_data.history_data_analysis}')
     # exit()
     run_ths()
 
