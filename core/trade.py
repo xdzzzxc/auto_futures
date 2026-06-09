@@ -38,51 +38,84 @@ def monitor_profit_loss():
         print(f"[{shared_data.ts_code}]新浪历史交易数据分析：\n{shared_data.history_data_analysis}")
     if shared_data.open_price:
         print(f"[{shared_data.ts_code}]今日开盘信息[东财网]:\n{shared_data.open_price}")
-    # print_context.print_context(f"order_param_dict:{shared_data.order_param_dict}\nhistory_data_analysis:{shared_data.history_data_analysis}"
-    #       f"\ntrade_menu_dict:{shared_data.trade_menu_dict}")
+
     if shared_data.trade_menu_dict:
-        print(f"程序已自动下单，成交参数：{shared_data.trade_menu_dict}\n{'=^='*40}")
+        print(f"程序已自动下单，成交参数：{shared_data.trade_menu_dict}\n{'=^=' * 40}")
+
     no_print = True  # 只打印一次防止刷屏
+
     while True:
         # ============== 无持仓直接跳过 ==============
         if not is_trade_statue():
             if no_print:
-               print(f"\r无期货交易中，等待开仓！", flush=True, end="")
-               no_print = False
+                print(f"\r无期货交易中，等待开仓！", flush=True, end="")
+                no_print = False
             sleep(0.5)
             continue
 
         # ============== 加锁读取交易参数 ==============
         with shared_data.dict_lock:
             direction = shared_data.trade_menu_dict.get("交易方向")
-            pre_profit = shared_data.trade_menu_dict.get("预盈利", 100)
-            pre_loss = shared_data.trade_menu_dict.get("预亏损", -150)
-            profit_price = shared_data.trade_menu_dict.get("止盈价")
-            loss_price = shared_data.trade_menu_dict.get("止损价")
+            pre_profit = 200  # 固定止盈 200 元
+            pre_loss = -400  # 固定止损 -400 元
+            profit_price = shared_data.trade_menu_dict.get("止盈价", 0.0)
+            loss_price = shared_data.trade_menu_dict.get("止损价", 0.0)
             ts_code = shared_data.trade_menu_dict.get("产品代码", shared_data.ts_code)
 
-        # ============== 加锁读取盈亏 ==============
+        # ============== 加锁读取 盈亏 + 当前价格 ==============
         profit = 0
+        current_price = 0.0
+
         try:
             with shared_data.ths_lock:
                 close_ctrl_position = shared_data.ths_common_control['平仓'][1]
                 profit_loss_ctrl = shared_data.ths_common_control['盈亏'][0]
+                price_ctrl = shared_data.ths_common_control['即时价格'][0]
+
+                # 读取盈亏
                 profit_text = profit_loss_ctrl.window_text().strip()
                 profit = float(profit_text.strip().split()[-1])
+
+                # 读取当前实时价格
+                current_price = float(price_ctrl.window_text())
+
         except (ValueError, Exception):
             sleep(0.5)
             continue
 
-        # ============== 平仓条件 ==============
+        # ============== 【核心：双条件平仓逻辑】==============
         need_close = False
         close_reason = ""
 
+        # ---------------- 止盈：盈利 >=200  或  价格达到止盈价 ----------------
         if profit >= pre_profit:
             need_close = True
-            close_reason = f"止盈平仓 | 盈利：{profit}元"
+            close_reason = f"✅ 止盈平仓 | 盈利：{profit}元（达到200元）"
+
+        # 买多止盈：当前价 >= 止盈价
+        elif direction == "Rise" and current_price >= profit_price:
+            need_close = True
+            close_reason = f"✅ 止盈平仓 | 价格触发止盈价 {profit_price}"
+
+        # 卖空止盈：当前价 <= 止盈价
+        elif direction == "Fall" and current_price <= profit_price:
+            need_close = True
+            close_reason = f"✅ 止盈平仓 | 价格触发止盈价 {profit_price}"
+
+        # ---------------- 止损：亏损 <=-400  或  价格达到止损价 ----------------
         elif profit <= pre_loss:
             need_close = True
-            close_reason = f"止损平仓 | 亏损：{profit}元"
+            close_reason = f"❌ 止损平仓 | 亏损：{profit}元（达到-400元）"
+
+        # 买多止损：当前价 <= 止损价
+        elif direction == "Rise" and current_price <= loss_price:
+            need_close = True
+            close_reason = f"❌ 止损平仓 | 价格触发止损价 {loss_price}"
+
+        # 卖空止损：当前价 >= 止损价
+        elif direction == "Fall" and current_price >= loss_price:
+            need_close = True
+            close_reason = f"❌ 止损平仓 | 价格触发止损价 {loss_price}"
 
         # ============== 执行平仓 ==============
         if need_close:
@@ -95,10 +128,12 @@ def monitor_profit_loss():
                     sleep(0.2)
 
                 send_msg(f"自动平仓成功\n品种：{ts_code}\n{close_reason}")
-                break  # 退出监控线程
+                print_context.print_context(close_reason)
+                # break  # 如果是只有单交易退出监控线程，若有多各种交易如手动下单后则不会再次自动平仓
 
             except Exception as e:
                 send_msg(f"平仓失败错误：{str(e)}")
+                print_context.print_context(f"平仓失败：{str(e)}")
 
         sleep(0.5)
 

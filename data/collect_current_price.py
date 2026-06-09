@@ -20,6 +20,7 @@ def get_current_price(ts_code=None):
         with ths_lock:
             code_ctrl = shared_data.ths_common_control['期货代码'][0]
         shared_data.trade_window.set_focus()
+        code_ctrl.wait('enabled', timeout=5)
         code_ctrl.set_text(ts_code)
         sleep(random.uniform(0.2, 0.5))
         code_ctrl.type_keys('{ENTER}')

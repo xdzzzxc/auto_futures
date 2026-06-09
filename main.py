@@ -17,6 +17,7 @@ from data.data_from_sina import fetch_future_data
 from public.sync_time import sync_time
 from core.trade import monitor_profit_loss
 from data.get_quote import get_open_price
+from public.anti_screensaver import anti_screensaver_thread
 
 
 def get_direction(title="交易方向", msg=None) -> str | None:
@@ -300,7 +301,7 @@ if __name__ == "__main__":
     monitor_thread.start()
 
     print_context("✅ 所有交易线程启动成功，程序运行中...")
-
+    anti_screensaver_thread()
     try:
         while True:
             sleep(1)

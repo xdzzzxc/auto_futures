@@ -8,6 +8,19 @@ from public.jiaoyisuo import futures_info
 from public.agent import get_headers
 from public import shared_data, print_context
 
+import ctypes
+from ctypes import wintypes
+
+# 调用系统 MessageBox 弹窗（无第三方库，纯系统自带）
+def message_box(text, title="提示", buttons=0, icon=64):
+    user32 = ctypes.WinDLL('user32', use_last_error=True)
+    user32.MessageBoxW.argtypes = (wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.UINT)
+    return user32.MessageBoxW(None, text, title, buttons | icon)
+
+MB_OKCANCEL = 1
+MB_ICONEXCLAMATION = 48
+IDOK = 1
+IDCANCEL = 2
 
 def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.np/get"):
     # ==================== 配置区 ====================
@@ -102,6 +115,24 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
             "percent": item.get("f3", 0.0)
         }
         result_data[target_code] = data_item
+        # 如未获取开盘价的处理方式
+        open_price = data_item.get("open", 0.0)
+        if open_price == 0.0 or open_price is None:
+            # 未获取到有效开盘价 → 弹出对话框
+            choice = message_box(
+                f"未获取到 {target_code} 的有效开盘价！\n\n确定 = 手动输入\n取消 = 退出程序",
+                title="开盘价获取失败",
+                buttons=MB_OKCANCEL,
+                icon=MB_ICONEXCLAMATION
+            )
+            if choice == IDOK:
+                # ✅ 点【确定】：跳去执行 except 里的手动输入
+                print("⚠️ 用户选择手动输入开盘价")
+                raise Exception("开盘价为0，进入手动输入模式")
+            else:
+                # ❌ 点【取消】：直接退出
+                print("⚠️ 用户选择取消，程序终止")
+                exit()
 
         # ==================== 只保存今日文件，无任何多余 ====================
         today_file = os.path.join(cache_folder, f"{target_code}_{today_str}_openprice.json")
@@ -112,9 +143,9 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
 
     except Exception as e:
         print(f"❌ {target_code}今日开盘信息： 获取失败：\n{str(e)}\n网络来源——{url}\n{'>>'*20} 请手动输入开盘价 {'<<'*20}")
-        open_price_input = input(f"请从东财网或其他官网查询该期货品种的今日开盘价\n{shared_data.ts_code}")
-        pre_settle_input = input(f"请从东财网或其他官网查询该期货品种的昨日结算价\n{shared_data.ts_code}")
-        pre_close_input = input(f"请从东财网或其他官网查询该期货品种的昨日收盘价\n{shared_data.ts_code}")
+        open_price_input = float(input(f"请从东财网或其他官网查询该期货品种的今日开盘价\n{shared_data.ts_code}"))
+        pre_settle_input = float(input(f"请从东财网或其他官网查询该期货品种的昨日结算价\n{shared_data.ts_code}"))
+        pre_close_input = float(input(f"请从东财网或其他官网查询该期货品种的昨日收盘价\n{shared_data.ts_code}"))
         result_data[target_code] = {
             "tscode": target_code,
             "open": float(open_price_input),
