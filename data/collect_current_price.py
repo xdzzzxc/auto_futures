@@ -3,7 +3,7 @@ from datetime import datetime
 from public import shared_data
 from public.print_context import print_context
 import random
-
+from pywinauto.timings import wait_until
 from public.shared_data import ths_lock
 
 
@@ -12,22 +12,20 @@ def get_current_price(ts_code=None):
     if ts_code is None:
         ts_code = shared_data.ts_code if shared_data.ts_code is not None else "m2609"
 
-    # 解锁 + 切换品种（只执行一次）
-    try:
-        if shared_data.ths_common_control['商品锁'][2] == "GeometryGroup.TradeLock":
-            shared_data.ths_common_control['商品锁'][0].click_input()
-            sleep(random.uniform(0.4, 0.5))
-        with ths_lock:
-            code_ctrl = shared_data.ths_common_control['期货代码'][0]
-        shared_data.trade_window.set_focus()
-        code_ctrl.wait('enabled', timeout=5)
-        code_ctrl.set_text(ts_code)
-        sleep(random.uniform(0.2, 0.5))
-        code_ctrl.type_keys('{ENTER}')
-        sleep(random.uniform(0.2, 0.5))
-        shared_data.click_position(shared_data.ths_common_control["商品锁"][1])
-    except ValueError as e:
-        print_context(f"⚠️ 切换合约失败，继续重试...\n{e}")
+    if shared_data.ths_common_control['商品锁'][2] == "GeometryGroup.TradeLock":
+        shared_data.ths_common_control['商品锁'][0].click_input()
+        sleep(random.uniform(0.4, 0.5))
+    with ths_lock:
+        code_ctrl = shared_data.ths_common_control['期货代码'][0]
+
+    shared_data.trade_window.set_focus()
+    wait_until(5, 0.1, code_ctrl.is_enabled)
+    code_ctrl.set_text(ts_code)
+    sleep(random.uniform(0.2, 0.5))
+    code_ctrl.type_keys('{ENTER}')
+    sleep(random.uniform(0.2, 0.5))
+    shared_data.click_position(shared_data.ths_common_control["商品锁"][1])
+
 
     # 主循环
     while True:
@@ -35,7 +33,7 @@ def get_current_price(ts_code=None):
         if not shared_data.trade_flag():
             if not is_printed:
                 print_context(f"[{datetime.now()}] 非交易时间，等待开市...")
-                print_context(f'已缓存价格条数：{len(shared_data.cur_price_deque)}')
+                # print_context(f'已缓存价格条数：{len(shared_data.cur_price_deque)}')
                 is_printed = True
             sleep(0.5)
             continue
@@ -77,12 +75,13 @@ def get_current_price(ts_code=None):
                     except:
                         continue
 
-                print(f'\r[{datetime.now().strftime("%H:%M:%S")}] 已获取 {len(shared_data.cur_price_deque)} 条 | 最新10条：{latest_10}',
-                      end='', flush=True)
+                print(f'\r[{datetime.now().strftime("%H:%M:%S")}] '
+                      f'已获取 {len(shared_data.cur_price_deque)} 条 | 最新10条：{latest_10}', end='', flush=True)
+
         except:
             pass
 
-        sleep(5)
+        sleep(5)  # 获取即时品种市场价格的时间间隔设置
 
 if __name__ == "__main__":
     print(shared_data.trade_flag())

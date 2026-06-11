@@ -177,4 +177,4 @@ def get_future_info(symbol: str) -> Dict[str, Any] | None:
 
 
 if __name__ == "__main__":
-    get_future_info("jd2609")
+    print(get_future_info("jd2609"))

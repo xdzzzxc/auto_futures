@@ -22,7 +22,26 @@ MB_ICONEXCLAMATION = 48
 IDOK = 1
 IDCANCEL = 2
 
+def is_in_restrict_time() -> bool:
+    """判断当前时间是否在 02:00 - 09:00 之间"""
+    now = datetime.now().hour
+    # print(now)
+    return 2 < now < 9
+
 def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.np/get"):
+    target_code = shared_data.ts_code.strip() if ts_code is None else ts_code
+    no_print = True
+    while True:
+        cur_time = datetime.now().strftime("%H:%M:%S")
+        if is_in_restrict_time():
+            if no_print:
+                print(f"\r未到开市时间，暂不能获取期货品种的开盘信息，请等待！  当前时间：{cur_time}", end="", flush=True)
+                no_print = False
+            sleep(1)
+            continue
+        else:
+            print_context.print_context(f"开始获取期货品种[{ts_code}]的今日开盘信息")
+            break
     # ==================== 配置区 ====================
     EXCHANGE_CODE = {
         "上期所": 113,
@@ -39,8 +58,6 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
 
     cache_folder = os.path.join(os.getcwd(), "futures_data")
     os.makedirs(cache_folder, exist_ok=True)
-
-    target_code = shared_data.ts_code.strip() if ts_code is None else ts_code
 
     # ==================== 第一步：清理2天前的缓存 ====================
     # print("\r正在清理2天前的缓存文件...", flush=True, end="")
@@ -72,7 +89,7 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
                     data = json.load(fp)
                 result_data[target_code] = data
                 found_local_file = True
-                print_context.print_context(f"✅ 从本地成功加载数据文件：{filename}")
+                print_context.print_context(f"✅ 从本地成功加载数据文件：{file_path}")
                 break
             except:
                 continue
@@ -143,9 +160,27 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
 
     except Exception as e:
         print(f"❌ {target_code}今日开盘信息： 获取失败：\n{str(e)}\n网络来源——{url}\n{'>>'*20} 请手动输入开盘价 {'<<'*20}")
-        open_price_input = float(input(f"请从东财网或其他官网查询该期货品种的今日开盘价\n{shared_data.ts_code}"))
-        pre_settle_input = float(input(f"请从东财网或其他官网查询该期货品种的昨日结算价\n{shared_data.ts_code}"))
-        pre_close_input = float(input(f"请从东财网或其他官网查询该期货品种的昨日收盘价\n{shared_data.ts_code}"))
+        import tkinter as tk
+        from tkinter import simpledialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)  # 窗口总是置顶
+        open_price_input = simpledialog.askfloat(f"{url}", f"期货品种: {target_code}")
+        if open_price_input is None:
+            print("用户取消输入，程序退出！")
+            root.destroy()
+            exit()
+        pre_settle_input = simpledialog.askfloat(f"{url}", f"请手动查询{target_code}品种的昨日结算价 >>>")
+        if pre_settle_input is None:
+            print("用户取消输入，程序退出！")
+            root.destroy()
+            exit()
+        pre_close_input = simpledialog.askfloat(f"{url}", f"请手动查询{target_code}品种的前日收盘价 >>>")
+        if pre_close_input is None:
+            print("用户取消输入，程序退出！")
+            root.destroy()
+            exit()
+
         result_data[target_code] = {
             "tscode": target_code,
             "open": float(open_price_input),
@@ -154,7 +189,9 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
             "change": 0.0,
             "percent": 0.0
         }
-
+        today_file = os.path.join(cache_folder, f"{target_code}_{today_str}_openprice.json")
+        with open(today_file, "w", encoding="utf-8") as fp:
+            json.dump(result_data[ts_code], fp, ensure_ascii=False, indent=4)
         # print(f"✅ 已使用手动输入开盘价：{float(open_price_input)}")
 
     shared_data.open_price = result_data
@@ -163,3 +200,4 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
 
 if __name__ == '__main__':
     print(get_open_price(ts_code="c2609"))
+    # print(is_in_restrict_time())

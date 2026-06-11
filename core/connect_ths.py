@@ -10,16 +10,9 @@ import psutil
 from public.close_ad_window import close_ad_windows
 from public import shared_data
 ths_path = r"C:\同花顺期货通\bin\hexinlauncher.exe"
+# RESTART_COUNT = 0
+# MAX_RESTART_TIMES = 3  # 最多重启6次
 
-# condition_ctrls_rectangle = {
-#     "期货品种": (669, 341, 779, 360), "最新价": (729, 412, 801, 436),
-#     "小于": (730, 436, 800, 459), "大于": (730, 459, 800, 482),
-#     "交易价": (812, 412, 902, 436), "买卖": (748, 456, 820, 480),
-#     "买入": (749, 480, 819, 503), "卖出": (749, 503, 819, 526),
-#     "手数": (1027, 456, 1097, 480), "止损止盈": (743, 547, 883, 571),
-#     "指定价格止损止盈": (744, 617, 882, 640), "止损价": (747, 581, 837, 605),
-#     "止盈价": (747, 609, 837, 633), "创建": (1115, 708, 1141, 727)
-# }
 login_ctrl = {'期货账户': (1663, 1019, 1697, 1035), '选择用户': (862, 502, 1045, 522),
               '模拟用户': (847, 538, 1077, 555), '国泰君安_CTP': (847, 563, 1047, 580),
               '期货密码': (862, 582, 1046, 602), '登录': (840, 647, 1080, 681),
@@ -27,10 +20,73 @@ login_ctrl = {'期货账户': (1663, 1019, 1697, 1035), '选择用户': (862, 50
 user_name_dict = {0: "模拟用户", 1: "期货用户"}
 ctrl_mapping = {}
 ths_common_ctrls_dict = {'用户名': (18, 721, 155, 738), '权益': (165, 719, 256, 739),
-                         '可用资金': (271, 719, 390, 739), '锁': (287, 797, 303, 813),
-                         '期货名称': (214, 796, 286, 813), '即时价格': (245, 836, 281, 853),
+                         '可用资金': (271, 719, 390, 739), '商品锁': (287, 797, 303, 813),
+                         '期货代码': (214, 796, 286, 813), '即时价格': (245, 836, 281, 853),
                          '平仓': (428, 829, 521, 889), '盈亏': (213, 923, 454, 962),
                          '保证金': (213, 945, 426, 962), '条件单': (272, 988, 311, 1007)}
+# REQUIRE_CTRL_KEYS = list(ths_common_ctrls_dict.keys())
+
+
+# def restart_ths():
+#     global RESTART_COUNT
+#     RESTART_COUNT += 1
+#     print(f"\n===== 第 {RESTART_COUNT} 次重启同花顺 =====")
+#
+#     # 达到最大重试次数，直接退出
+#     if RESTART_COUNT >= MAX_RESTART_TIMES:
+#         print(f"[严重错误] 已达到最大重启次数 {MAX_RESTART_TIMES}，程序强制退出")
+#         exit(1)
+#
+#     # 1. 强制结束所有同花顺相关进程
+#     print("正在关闭旧同花顺进程...")
+#     for proc in psutil.process_iter(['name', 'exe']):
+#         try:
+#             name = (proc.info.get('name') or "").lower()
+#             exe = (proc.info.get('exe') or "").lower()
+#             if "hexin" in name or "hexinlauncher" in name or "同花顺" in exe:
+#                 proc.kill()
+#                 print(f"已终止进程 PID: {proc.pid}")
+#         except (psutil.NoSuchProcess, psutil.AccessDenied):
+#             continue
+#
+#     # 2. 等待进程彻底退出、端口/句柄释放（延长时长，适配慢电脑）
+#     sleep(5)
+#     # 清空全局控件脏数据
+#     shared_data.login_control.clear()
+#     shared_data.ths_common_control.clear()
+#     print("旧进程已关闭，准备重新启动软件...")
+#
+#     # 3. 捕获启动异常，避免单次失败直接炸栈
+#     try:
+#         start_ths()
+#         # 等待主窗口、界面、控件渲染完成
+#         sleep(4)
+#         run_ths()
+#     except Exception as e:
+#         print(f"[重启异常] 启动/连接窗口失败: {str(e)}，继续重试")
+#         sleep(2)
+#         restart_ths()
+
+
+# def check_ctrl_valid():
+#     """校验所有关键控件，异常则重启"""
+#     ctrl_map = shared_data.ths_common_control
+#     for key in REQUIRE_CTRL_KEYS:
+#         # 1. 键不存在 → 无效
+#         if key not in ctrl_map:
+#             print(f"[校验失败] 缺失控件键: {key}，即将重启")
+#             sleep(2)  # 停顿2秒再重启
+#             restart_ths()
+#             return
+#         # 2. 控件对象为 None → 无效
+#         ctrl_item = ctrl_map[key]
+#         if not ctrl_item or ctrl_item[0] is None:
+#             print(f"[校验失败] 控件 {key} 为 None，即将重启")
+#             sleep(2)
+#             restart_ths()
+#             return
+#     # 全部通过
+#     print(f"[校验通过] 所有控件加载正常 - {REQUIRE_CTRL_KEYS}")
 
 
 def start_ths():
@@ -110,7 +166,7 @@ def run_ths(user_type=shared_data.user_type):
     shared_data.login_control.clear()
     shared_data.login_control['期货账户'] = [user_type_btn, (user_type_btn.rectangle().left, user_type_btn.rectangle().top, user_type_btn.rectangle().right, user_type_btn.rectangle().bottom)]
     if not user_type_btn.is_enabled():
-        print(f'用户已登录，如有冲突请退出同花顺程序重新登录！')
+        # print(f'用户已登录，如有冲突请退出同花顺程序重新登录！')
         restart_ths()
         ths_window = shared_data.trade_window
         ths_window.set_focus()
@@ -158,7 +214,7 @@ def run_ths(user_type=shared_data.user_type):
     # 开始定位通用控件：ths_common_control = {} 交易平台常用控件字典
     shared_data.ths_common_control.clear()
     all_ctrls_count = 0
-    print(f"等待同花顺程序加载底层控件......[{datetime.now().strftime('%H:%M:%S')}]\n如果等待时间太长，可以选择手动先重启软件。")
+    # print(f"等待同花顺程序加载底层控件......[{datetime.now().strftime('%H:%M:%S')}]\n如果等待时间太长，可以选择手动先重启软件。")
     while True:
         all_ctrls = ths_window.descendants()  # control_type='Text'
         if len(all_ctrls) == all_ctrls_count:
@@ -201,11 +257,8 @@ def run_ths(user_type=shared_data.user_type):
             shared_data.ths_common_control['期货代码'] = [ctrl, (ctrl.rectangle().left, ctrl.rectangle().top, ctrl.rectangle().right, ctrl.rectangle().bottom), ctrl.window_text()]
         if ctrl.rectangle().left in range(230, 250) and ctrl.rectangle().top in range(830, 842):
             shared_data.ths_common_control['即时价格'] = [ctrl, ctrl.rectangle(), ctrl.window_text()]
-    # 给shared_data.is_trading赋值，也是判断目前是否有期货商品的交易
 
-    # for k, (key, value) in enumerate(shared_data.ths_common_control.items(), start=1):
-    #     print(f"已定位的控件清单：\n{k}.ctrl_name:{key} ctrl_rectangle:{value[1]} ctrl_window_text:{value[2]} - {value[0]}")
-    #
+    # check_ctrl_valid()  # 检查所在控件是否是已成功加载
 
 
 if __name__ == '__main__':

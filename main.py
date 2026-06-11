@@ -18,6 +18,7 @@ from public.sync_time import sync_time
 from core.trade import monitor_profit_loss
 from data.get_quote import get_open_price
 from public.anti_screensaver import anti_screensaver_thread
+from data.reget_open_price import reget_open_price
 
 
 def get_direction(title="交易方向", msg=None) -> str | None:
@@ -285,22 +286,21 @@ def _init_shared_data(user_type, target_days, lot_size):
 
 if __name__ == "__main__":
     _init_shared_data(
-        user_type=0,
-        target_days=5,
-        lot_size=1
+        user_type=0,  # 0虚拟用户，1国泰君安期货用户
+        target_days=5,  # 期货品种历史交易日数据，从前一个交易日往前推
+        lot_size=1  # 交易手数，不同期货品种有不同的最低交易手数
     )
-
     # ========== 启动核心线程（daemon=True 安全退出）==========
     price_thread = threading.Thread(target=get_current_price, name="PriceThread", daemon=True)
     order_thread = threading.Thread(target=order, name="OrderThread", daemon=True)
     monitor_thread = threading.Thread(target=monitor_profit_loss, name="MonitorThread", daemon=True)
-
+    reget_open_price_thread = threading.Thread(target=reget_open_price, name="ReGetOpenPriceThread", daemon=True)
     price_thread.start()
     order_thread.start()
-    sleep(5)
     monitor_thread.start()
-
-    print_context("✅ 所有交易线程启动成功，程序运行中...")
+    print_context("✅ 所有量化交易线程启动成功！")
+    sleep(5)
+    reget_open_price_thread.start()
     anti_screensaver_thread()
     try:
         while True:

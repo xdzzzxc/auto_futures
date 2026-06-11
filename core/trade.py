@@ -5,14 +5,14 @@ from public.jiaoyisuo import get_future_info as get_info  # ===================
 from public import shared_data, print_context
 from sendmsg.weichat_push import send_msg
 from public.jiaoyisuo import get_future_info
-from public.screen_save import press_esc
+from public.anti_screensaver import anti_screensaver_thread
 from public.shared_data import click_position, is_trade_statue
 from data.data_from_sina import fetch_future_data
 
 
 def auto_trade():
     """负责点击买多或卖空进行期货品种下单"""
-    press_esc()
+
     shared_data.trade_window.maximize()
     shared_data.trade_window.set_focus()
     controls = shared_data.ths_common_control
@@ -200,11 +200,12 @@ def order():
         end_time = datetime.strptime("21:30:00", "%H:%M:%S").time()
     else:
         start_time = datetime.strptime("9:00:00", "%H:%M:%S").time()
-        end_time = datetime.strptime("9:30:00", "%H:%M:%S").time()
+        end_time = datetime.strptime("10:30:00", "%H:%M:%S").time()
 
     print_context.print_context(f"[{ts_code}][夜场：{is_night}] 第一单下单交易时间段：{start_time} ~ {end_time}")
 
     # ========== 第一阶段交易循环 ==========
+    no_print = True
     while True:
         current_time = datetime.now().time()
         if current_time >= end_time:
@@ -213,13 +214,15 @@ def order():
 
         # 未到开始时间
         if current_time < start_time:
-            print(f"\r现在不是第一阶段的合法交易时间：{datetime.now().strftime('%H:%M:%S %A')},"
-                  f"正常交易时间段：{start_time}-{end_time}", flush=True, end="")
+            if no_print:
+                print(f"\r现在不是第一阶段的合法交易时间：{datetime.now().strftime('%H:%M:%S %A')},"
+                      f"正常交易时间段：{start_time}-{end_time}", flush=True, end="")
 
-            sleep(0.5)
+                sleep(0.5)
+                no_print = False
             continue
 
-        print(f"\r正在等待条件成立后下单 ······ ", flush=True, end='')
+        # print(f"\r正在等待条件成立后下单 ······ ", flush=True, end='')
 
         # ========== 读取价格（加锁，防崩溃） ==========
         try:

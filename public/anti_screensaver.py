@@ -22,7 +22,7 @@ def anti_screensaver_thread():
     # 守护线程：主程序关闭，它自动关闭
     thread = threading.Thread(target=anti_screensaver, daemon=True)
     thread.start()
-    print("✅ 防锁屏守护线程已启动")
+    print("✅ 程序已在后台启动防锁屏功能")
 
 if __name__ == "__main__":
     anti_screensaver_thread()
