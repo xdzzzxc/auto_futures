@@ -1,4 +1,3 @@
-from datetime import datetime
 import threading
 from time import sleep
 from public import shared_data
@@ -12,10 +11,9 @@ from data.collect_current_price import get_current_price
 from data.future_trend import query_future_info
 import tkinter as tk
 from tkinter import ttk
-from data.excel import monitor_trade
 from data.data_from_sina import fetch_future_data
 from public.sync_time import sync_time
-from core.trade import monitor_profit_loss
+from core.monitor import monitor_profit_loss
 from data.get_quote import get_open_price
 from public.anti_screensaver import anti_screensaver_thread
 from data.reget_open_price import reget_open_price
@@ -263,7 +261,7 @@ def select_future():
             shared_data.direction = input_value
             break
 
-def _init_shared_data(user_type, target_days, lot_size):
+def _init_shared_data(user_type, target_days, lot_size, interval):
     print_context("程序正在校验日期、时间 ······")
     sync_time()
     shared_data.user_type = user_type
@@ -273,6 +271,7 @@ def _init_shared_data(user_type, target_days, lot_size):
     # print_context(f"您已选择的期货品种： {ts_code}")
     shared_data.target_days = target_days
     shared_data.lot_size = lot_size
+    shared_data.interval = interval  # 时间间隔
     prefix = re.match(r'[a-zA-Z]+', ts_code).group()
     shared_data.min_price_change = futures_info[prefix]['min_price_change']
     get_open_price()
@@ -288,7 +287,8 @@ if __name__ == "__main__":
     _init_shared_data(
         user_type=0,  # 0虚拟用户，1国泰君安期货用户
         target_days=5,  # 期货品种历史交易日数据，从前一个交易日往前推
-        lot_size=1  # 交易手数，不同期货品种有不同的最低交易手数
+        lot_size=1,  # 交易手数，不同期货品种有不同的最低交易手数
+        interval=5
     )
     # ========== 启动核心线程（daemon=True 安全退出）==========
     price_thread = threading.Thread(target=get_current_price, name="PriceThread", daemon=True)

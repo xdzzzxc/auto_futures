@@ -3,76 +3,92 @@ import os
 from logging.handlers import RotatingFileHandler
 from public import shared_data
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+log_dir = os.path.join(BASE_DIR, "log")
+
+# 全局缓存logger，避免重复初始化
+_logger_cache = {}
 
 def setup_trade_loggers(level=logging.INFO):
     """
-    配置并返回两个交易相关的日志器（模拟用户、期货用户）
-    :param level: 日志级别，默认INFO
-    :return: simulation_logger, futures_logger 两个日志器对象
+    配置交易日志器，根据用户类型返回对应单例日志对象
+    :param level: 日志级别
+    :return: 日志器实例
     """
-    # 创建log文件夹（如果不存在）
+    os.makedirs(log_dir, exist_ok=True)
     user_type = shared_data.user_type
-    log_dir = "log"
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir, exist_ok=True)  # 加exist_ok=True防止多线程创建报错
-
-    # 定义通用日志格式
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
 
     def _setup_single_logger(logger_name, log_file):
-        """内部辅助函数：配置单个日志器"""
-        # 创建日志器
+        # 优先读缓存，彻底避免重复添加handler
+        if logger_name in _logger_cache:
+            return _logger_cache[logger_name]
+
         logger = logging.getLogger(logger_name)
         logger.setLevel(level)
-        logger.propagate = False  # 防止日志重复输出
+        logger.propagate = False
+        # 清空已有handler（兜底）
+        logger.handlers.clear()
 
-        # 避免重复添加处理器
-        if logger.handlers:
-            return logger
-
-        # 创建文件处理器（设置日志文件大小限制和备份数量）
+        # 文件日志格式
+        file_fmt = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(filename)s[%(lineno)d] %(funcName)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
         file_handler = RotatingFileHandler(
             log_file,
-            maxBytes=5 * 1024 * 1024,  # 5MB
+            maxBytes=5 * 1024 * 1024,
             backupCount=20,
             encoding='utf-8'
         )
-        file_handler.setFormatter(formatter)
+        file_handler.setFormatter(file_fmt)
 
-        # 配置控制台处理器
+        # 控制台格式 + 颜色（级别区分色，消息绿色）
+        console_fmt = logging.Formatter(
+            '\033[33m%(asctime)s\033[0m \033[31m%(levelname)s\033[0m %(filename)s:%(lineno)d \n>>> \033[32m%(message)s\033[0m',
+            datefmt='%H:%M:%S'
+        )
         console_handler = logging.StreamHandler()
-        console_handler.setFormatter(formatter)
-        console_handler.setLevel(level)
+        console_handler.setFormatter(console_fmt)
 
-        # 添加处理器到日志器
         logger.addHandler(file_handler)
         logger.addHandler(console_handler)
+        _logger_cache[logger_name] = logger
         return logger
 
-    # ========== 核心修正：路径拼接去掉多余的'log' ==========
     if user_type == 0:
-        simulation_logger = _setup_single_logger(
-            'simulation_user',
-            os.path.join(log_dir, 'simulation_user_trade.log')  # 正确路径：log/simulation_user_trade.log
-        )
-        return simulation_logger
+        return _setup_single_logger('simulation_user', os.path.join(log_dir, 'simulation_user_trade.log'))
     else:
-        futures_logger = _setup_single_logger(
-            'futures_user',
-            os.path.join(log_dir, 'futures_user_trade.log')     # 正确路径：log/futures_user_trade.log
-        )
-        return futures_logger
-    # 返回两个日志器
-    # return simulation_logger, futures_logger
+        return _setup_single_logger('futures_user', os.path.join(log_dir, 'futures_user_trade.log'))
+
+
+def read_log(user_type=0, last_lines: int = 0) -> None:
+    log_file_map = {0: "simulation_user_trade.log", 1: "futures_user_trade.log"}
+    log_name = log_file_map.get(user_type, "simulation_user_trade.log")
+    log_path = os.path.join("log", log_name)
+    if not os.path.exists(log_path):
+        print(f"日志文件不存在：{log_path}")
+        return
+
+    try:
+        with open(log_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        if last_lines > 0:
+            show_data = lines[-last_lines:] if len(lines) >= last_lines else lines
+        else:
+            show_data = lines
+
+        print("========== 日志内容 ==========")
+        print("".join(show_data))
+    except Exception as e:
+        print(f"读取日志失败：{e}")
 
 
 # 调用示例
 if __name__ == "__main__":
     # 获取日志器
-    log = setup_trade_loggers(user_type=0)  # user_type=1表示期货用户
+    log = setup_trade_loggers()  # user_type=1表示期货用户
     # 测试输出
     log.info("用户日志测试 - 路径已修正")
     log.error("用户错误日志测试")
+    read_log()

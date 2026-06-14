@@ -35,12 +35,12 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
         cur_time = datetime.now().strftime("%H:%M:%S")
         if is_in_restrict_time():
             if no_print:
-                print(f"\r未到开市时间，暂不能获取期货品种的开盘信息，请等待！  当前时间：{cur_time}", end="", flush=True)
+                print_context.print_context(f"\r未到开市时间，暂不能获取期货品种的开盘信息，请等待！  当前时间：{cur_time}", end="", flush=True)
                 no_print = False
             sleep(1)
             continue
         else:
-            print_context.print_context(f"开始获取期货品种[{ts_code}]的今日开盘信息")
+            # print_context.print_context(f"开始获取期货品种[{target_code}]的今日开盘信息")
             break
     # ==================== 配置区 ====================
     EXCHANGE_CODE = {
@@ -156,7 +156,7 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
         with open(today_file, "w", encoding="utf-8") as fp:
             json.dump(data_item, fp, ensure_ascii=False, indent=4)
 
-        print(f"✅ 已从网络[{url}]成功获取并保存 <{target_code}> 期货品种的今日开盘价等相关数据！")
+        print(f"✅ 已从网络[{url}]成功获取并保存 <{target_code}> 期货品种的今日开盘价等相关数据>>>\n{data_item}")
 
     except Exception as e:
         print(f"❌ {target_code}今日开盘信息： 获取失败：\n{str(e)}\n网络来源——{url}\n{'>>'*20} 请手动输入开盘价 {'<<'*20}")

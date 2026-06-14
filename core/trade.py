@@ -1,197 +1,80 @@
 from time import sleep
-from datetime import datetime, timedelta
-from collections import deque
-from public.jiaoyisuo import get_future_info as get_info  # ===================
-from public import shared_data, print_context
-from sendmsg.weichat_push import send_msg
+from datetime import datetime
 from public.jiaoyisuo import get_future_info
-from public.anti_screensaver import anti_screensaver_thread
+from public import shared_data
+from public.print_context import print_context
+from sendmsg.weichat_push import send_msg
 from public.shared_data import click_position, is_trade_statue
+from log.trade_log import setup_trade_loggers
+from data.get_quote import get_open_price
 from data.data_from_sina import fetch_future_data
+logger = setup_trade_loggers()
 
-
-def auto_trade():
-    """负责点击买多或卖空进行期货品种下单"""
-
-    shared_data.trade_window.maximize()
-    shared_data.trade_window.set_focus()
-    controls = shared_data.ths_common_control
-    order_params = shared_data.trade_menu_dict  # 获取定单参数表
-    sleep(0.5)
-    current_time = datetime.now().time()
-    # 买多 / 卖空
-    if order_params.get('交易方向') == "Rise":
-        click_position(controls["买多"][1])
-    else:
-        click_position(controls["卖空"][1])
-
-    print_context.print_context(f"程序已成功下单，正在交易中......[{order_params['交易方向']}]")
-
-
-def monitor_profit_loss():
-    """监视动态价格变化，完成自动平仓"""
-    print_context.print_context(f'交易状态动态监控中 ......')
-    if shared_data.order_param_dict:
-        print(f"[{shared_data.ts_code}]下单参数：\n{shared_data.order_param_dict}")
-
-    if shared_data.history_data_analysis:
-        print(f"[{shared_data.ts_code}]新浪历史交易数据分析：\n{shared_data.history_data_analysis}")
-    if shared_data.open_price:
-        print(f"[{shared_data.ts_code}]今日开盘信息[东财网]:\n{shared_data.open_price}")
-
-    if shared_data.trade_menu_dict:
-        print(f"程序已自动下单，成交参数：{shared_data.trade_menu_dict}\n{'=^=' * 40}")
-
-    no_print = True  # 只打印一次防止刷屏
-
+def opening_session_trade(ts_code=None):
+    ts_code = shared_data.ts_code if ts_code is None else ts_code
+    logger.info(f'交易品种属性：{shared_data.open_price}')
+    logger.info(f"交易品种[{ts_code}]的历史交易数据汇总：\n{shared_data.history_data_analysis}")
+    logger.info(f"交易品种基本属性：{shared_data.ts_code_attribute_dict}")
     while True:
-        # ============== 无持仓直接跳过 ==============
-        if not is_trade_statue():
-            if no_print:
-                print(f"\r无期货交易中，等待开仓！", flush=True, end="")
-                no_print = False
-            sleep(0.5)
-            continue
 
-        # ============== 加锁读取交易参数 ==============
-        with shared_data.dict_lock:
-            direction = shared_data.trade_menu_dict.get("交易方向")
-            pre_profit = 200  # 固定止盈 200 元
-            pre_loss = -400  # 固定止损 -400 元
-            profit_price = shared_data.trade_menu_dict.get("止盈价", 0.0)
-            loss_price = shared_data.trade_menu_dict.get("止损价", 0.0)
-            ts_code = shared_data.trade_menu_dict.get("产品代码", shared_data.ts_code)
-
-        # ============== 加锁读取 盈亏 + 当前价格 ==============
-        profit = 0
-        current_price = 0.0
-
-        try:
-            with shared_data.ths_lock:
-                close_ctrl_position = shared_data.ths_common_control['平仓'][1]
-                profit_loss_ctrl = shared_data.ths_common_control['盈亏'][0]
-                price_ctrl = shared_data.ths_common_control['即时价格'][0]
-
-                # 读取盈亏
-                profit_text = profit_loss_ctrl.window_text().strip()
-                profit = float(profit_text.strip().split()[-1])
-
-                # 读取当前实时价格
-                current_price = float(price_ctrl.window_text())
-
-        except (ValueError, Exception):
-            sleep(0.5)
-            continue
-
-        # ============== 【核心：双条件平仓逻辑】==============
-        need_close = False
-        close_reason = ""
-
-        # ---------------- 止盈：盈利 >=200  或  价格达到止盈价 ----------------
-        if profit >= pre_profit:
-            need_close = True
-            close_reason = f"✅ 止盈平仓 | 盈利：{profit}元（达到200元）"
-
-        # 买多止盈：当前价 >= 止盈价
-        elif direction == "Rise" and current_price >= profit_price:
-            need_close = True
-            close_reason = f"✅ 止盈平仓 | 价格触发止盈价 {profit_price}"
-
-        # 卖空止盈：当前价 <= 止盈价
-        elif direction == "Fall" and current_price <= profit_price:
-            need_close = True
-            close_reason = f"✅ 止盈平仓 | 价格触发止盈价 {profit_price}"
-
-        # ---------------- 止损：亏损 <=-400  或  价格达到止损价 ----------------
-        elif profit <= pre_loss:
-            need_close = True
-            close_reason = f"❌ 止损平仓 | 亏损：{profit}元（达到-400元）"
-
-        # 买多止损：当前价 <= 止损价
-        elif direction == "Rise" and current_price <= loss_price:
-            need_close = True
-            close_reason = f"❌ 止损平仓 | 价格触发止损价 {loss_price}"
-
-        # 卖空止损：当前价 >= 止损价
-        elif direction == "Fall" and current_price >= loss_price:
-            need_close = True
-            close_reason = f"❌ 止损平仓 | 价格触发止损价 {loss_price}"
-
-        # ============== 执行平仓 ==============
-        if need_close:
-            try:
-                with shared_data.ths_lock:
-                    shared_data.trade_window.maximize()
-                    shared_data.trade_window.set_focus()
-                    sleep(0.1)
-                    click_position(close_ctrl_position)
-                    sleep(0.2)
-
-                send_msg(f"自动平仓成功\n品种：{ts_code}\n{close_reason}")
-                print_context.print_context(close_reason)
-                # break  # 如果是只有单交易退出监控线程，若有多各种交易如手动下单后则不会再次自动平仓
-
-            except Exception as e:
-                send_msg(f"平仓失败错误：{str(e)}")
-                print_context.print_context(f"平仓失败：{str(e)}")
-
-        sleep(0.5)
+        break
 
 
-def calculate_profit_loss(future_code: str, direction: str,
-                          trade_price: float | int,
-                          profit_price: float | int):
-    """计算盈亏与止损价 —— 已修复止损价异常问题"""
-    future_info = get_future_info(future_code) or {}
-    try:
-        commission = future_info["commission"]
-    except KeyError:
-        commission = future_info.get('commission_rate', 0)
+def normal_session_trade():
+    # while True:
+    """下单代码"""
 
-    commission_value = commission * 2 if commission > 0 else (profit_price + trade_price) * commission
-    min_price_change = future_info.get('min_price_change', 1)
-    on_tick_profit = future_info['one_tick_profit']
 
-    profit = 0
-    loss_price = 0
+def order(ts_code=None):
+    # 提前将ts_code期货的相关交易数据获取并存储到公共模块shared_data.py以便阶段下单函数调用
 
-    if direction == "Rise":
-        profit = (profit_price - trade_price) / min_price_change * on_tick_profit - commission_value
-        profit_diff = profit_price - trade_price
-        # ===================== 修复：买多止损价应该在交易价下方，不会出现负数 =====================
-        loss_price = trade_price - abs(profit_diff) * 1.5
+    ts_code = ts_code if ts_code is not None else shared_data.ts_code
+    ts_info = get_future_info(ts_code)
+    if ts_info is None:
+        print_context(f"未检测到品种信息 - {ts_code}")
+        return
+    else:
+        shared_data.ts_code_attribute_dict = ts_info  # 加入交易品种的属性到公共模块
+    is_night = ts_info.get("night_trading", False)
+    print_context(f"本次期货交易品种：{ts_info['exchange']} - {ts_code} - {ts_info['name']}")
+    # ===========交易品种的历史交易数据分析,结果传入公共模块============
+    fetch_future_data(ts_code)  # data.data_from_sina.fetch_future_data()
+    # ========获取交易品种开盘信息，结果传入公共模块open_price=========
+    get_open_price(ts_code)  # data.get_quote.get_open_price()
+    # return
+    if not ts_code:
+        print_context("请输入期货品种代码，如：au2609")
+        return
+    # 兜底超时
+    max_loop = 3600*15
+    loop_count = 0
+    while loop_count < max_loop:
+        loop_count += 1
+        # 先判断夜场和时间节点（日场必须在9：30分以前，夜场必须在21：30分以前
 
-    elif direction == "Fall":
-        profit = (trade_price - profit_price) / min_price_change * on_tick_profit - commission_value
-        profit_diff = trade_price - profit_price
-        # ===================== 修复：卖空止损价应该在交易价上方，不会飞上天 =====================
-        loss_price = trade_price + abs(profit_diff) * 1.5
-
-    elif direction == "Sideways":
-        if trade_price > profit_price:
-            profit = (trade_price - profit_price) / min_price_change * on_tick_profit - commission_value
-            profit_diff = trade_price - profit_price
-            loss_price = trade_price + abs(profit_diff) * 1.5
+        current_time = datetime.now()
+        h, m = current_time.hour, current_time.minute
+        if is_night and h == 21 and m < 30 and not is_trade_statue():
+            opening_session_trade()
+            break
+        elif not is_night and h == 9 and m < 30 and not is_trade_statue():
+            normal_session_trade()
+            break
         else:
-            profit = (profit_price - trade_price) / min_price_change * on_tick_profit - commission_value
-            profit_diff = profit_price - trade_price
-            loss_price = trade_price - abs(profit_diff) * 1.5
-
-    # ===================== 安全保护：止损价永远 > 0 =====================
-    loss_price = max(loss_price, 1.0)
-    return profit, loss_price
-
-
-def order():
+            print(f"\r未达到期货品种[{ts_code}]的交易条件，请等待下单！ - {current_time.strftime('%H:%M:%S')}", flush=True, end="")
+        sleep(1)  # 轮询间隔为1秒
+    else:
+        print_context("本次交易时间结束，等待下一个交易日的开盘！")
+    exit()
     """根据条件自动下单"""
-    ts_code = shared_data.ts_code  #  or "c2607"
+    ts_code = ts_code if ts_code is not None else shared_data.ts_code  #  or "c2607"
     ts_code_dict = get_info(ts_code)
     is_night = ts_code_dict.get("night_trading", False) if ts_code_dict else False
     # history_data = fetch_future_data(ts_code=shared_data.ts_code)
     history_data = shared_data.history_data_analysis
     # print(f'history_data: {history_data}')
     # print(f'shared_data.open_price:{shared_data.open_price}')
-    print_context.print_context(f"预计开市第一单交易区域价：{shared_data.open_price[ts_code]['open'] + history_data['最小高开差']} | "
+    logger.info(f"预计开市第一单交易区域价：{shared_data.open_price[ts_code]['open'] + history_data['最小高开差']} | "
                                 f"{shared_data.open_price[ts_code]['open'] - history_data['最小低开差']}")
 
     # 时段设置
@@ -200,9 +83,9 @@ def order():
         end_time = datetime.strptime("21:30:00", "%H:%M:%S").time()
     else:
         start_time = datetime.strptime("9:00:00", "%H:%M:%S").time()
-        end_time = datetime.strptime("10:30:00", "%H:%M:%S").time()
+        end_time = datetime.strptime("10:15:00", "%H:%M:%S").time()
 
-    print_context.print_context(f"[{ts_code}][夜场：{is_night}] 第一单下单交易时间段：{start_time} ~ {end_time}")
+    logger.info(f"[{ts_code}][夜场：{is_night}] 第一单下单交易时间段：{start_time} ~ {end_time}")
 
     # ========== 第一阶段交易循环 ==========
     no_print = True
@@ -298,4 +181,5 @@ def order():
 
 # ===================== 启动 =====================
 if __name__ == "__main__":
-    order()
+    order(ts_code="m2609")
+    opening_session_trade(ts_code="m2609")

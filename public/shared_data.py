@@ -10,6 +10,7 @@ trade_window = None  # 同花顺交易平台桌面对象
 current_price_dict = {}  # 即时行情中的期货商品买卖价格
 cur_price_deque = deque(maxlen=20000)
 deque_lock = threading.Lock()
+interval = 5  # 从同花顺窗口读取即时价格的时间间隔，默认为5秒
 login_control = {}  # 登录期货通交易软件
 ths_common_control = {}  # 交易平台常用控件字典,此处为多进程管理模式，以便进程数据共享
 condition_control = {}  # 条件单窗口控件映射字典
@@ -19,7 +20,9 @@ dict_lock = threading.Lock()  # 创建字典读写线程安全锁
 ths_future_edit_lock = False  # 期货名称输入（edit）框是否锁定，默认是False，亦即可以输入、编辑
 ts_code = ""  # 期货商品代码（如au2601)
 search_future_list = []  # 待搜索的期货商品代码列表
-open_price = {}
+open_price = {}  # 交易品种开盘价信息：trade.order()
+pre_profit = 0.0  # 手动设置固定止盈值
+pre_loss = 0.0  # 手动设置固定止损值
 target_days = 10  # 从tu_share获取ts_code历史行情数据（天数）
 lot_size = 1  # 期货买卖手数，默认值1，不同商品规定必须最少多少手
 direction = ""  # 如果有专业推荐，直接写买多-Rise、卖空-Fall，否则由历史数据与今日开盘价来确定多空方向
@@ -30,27 +33,19 @@ future_quote_dict = {}  # 期货行情 https://push2.eastmoney.com/api/qt/ulist.
 future_info_dict = {}  # 期货资讯行情
 # "交易方向", "交易价", "止损价", "止盈价", "交易前总额", "交易后总额", "利润"
 trade_menu_dict = {}  # 成交后的交易参数,在trade.py模块中产生
-min_price_change = 0.00  # 最小跳点数
-commission = 0.0  # 期货商品的每一手的手续费
-leverage = 0.0  # 盈利杠杆,用来计算实时盈亏：差价 * 杠杆比例
-margin = 0.0  # 期货商品保证金(与即时价位有关）
+ts_code_attribute_dict = {}  # 交易品种的基本属性
+# min_price_change = 0.00  # 最小跳点数
+# commission = 0.0  # 期货商品的每一手的手续费
+# leverage = 0.0  # 盈利杠杆,用来计算实时盈亏：差价 * 杠杆比例
+# margin = 0.0  # 期货商品保证金(与即时价位有关）
 
 total_balance = 0.0  # 账户总金额
 available_balance = 0.0  # 账户可用资金
 quote_list = ["m2609", "c2609", "jd2609"]  # 默认要从东方财富网获取开盘价等信息的期货品种
-# 默认期货商品品种
-# def get_tscode():
-#     now = datetime.now()
-#     year = str(now.year)[-2:]
-#     month = str(1 if now.month == 12 else now.month + 1).zfill(2)
-#     return year + month
-# default_futures = {f"m{get_tscode()}": ["Rise", "豆粕"],
-#                    f"jd{get_tscode()}": ["Rise", "鸡蛋"],
-#                    f"rb{get_tscode()}": ["Rise", "螺纹钢"]}  # 这里是默认的常规交易的几种期货商品，启动程序前可手动修改
+
 trade_time_table = [(9, 0, 10, 15), (10, 30, 11, 30), (13, 30, 15, 0), (21, 0, 23, 0), (0, 0, 1, 30)]  # 交易时间表, 最后一个用测试。
 # tradeoff = False  # 只是检测是不是在交易时间段
 start_trade_date = None  # 期货开始交易时间（下单日期）
-# is_trading = False  # 判断是否正在期货商品的交易，包含条件单在内；
 
 
 # ===================== 核心函数 =====================

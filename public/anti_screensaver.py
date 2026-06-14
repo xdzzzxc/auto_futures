@@ -1,9 +1,17 @@
 import threading
 import time
 import ctypes
+from public.close_ad_window import close_ad_windows
 
 user32 = ctypes.WinDLL('user32', use_last_error=True)
 
+def auto_close_popup():
+    while True:
+        try:
+            close_ad_windows()
+        except:
+            pass
+        time.sleep(60)
 
 def anti_screensaver():
     while True:
@@ -20,9 +28,12 @@ def anti_screensaver():
 
 def anti_screensaver_thread():
     # 守护线程：主程序关闭，它自动关闭
-    thread = threading.Thread(target=anti_screensaver, daemon=True)
-    thread.start()
+    screen_thread = threading.Thread(target=anti_screensaver, daemon=True)
+    screen_thread.start()
     print("✅ 程序已在后台启动防锁屏功能")
+    close_thread = threading.Thread(target=auto_close_popup, daemon=True)
+    close_thread.start()
+
 
 if __name__ == "__main__":
     anti_screensaver_thread()

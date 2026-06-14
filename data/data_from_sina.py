@@ -76,7 +76,7 @@ def fetch_future_data(ts_code=None):
 
     # 5. 无有效缓存 → 线上拉取数据、计算指标
     if fut_data is None:
-        print_context(f"🌐 线上拉取历史行情数据 | 合约: {ts_code}")
+        # print_context(f"🌐 线上拉取历史行情数据 | 合约: {ts_code}")
         days = getattr(shared_data, "target_days", 10)
         sina_fut_data = ak.futures_main_sina(symbol=ts_code)
 
@@ -113,7 +113,7 @@ def fetch_future_data(ts_code=None):
 
         # 保存缓存
         fut_data.to_pickle(cache_file)
-        print_context(f"💾 新数据已以[{os.path.basename(cache_file)}]文件格式缓存,保存路径 >>> {cache_file}")
+        print_context(f"💾 成功获取[{ts_code}]合约历史数据，缓存路径 >>>{cache_file}")
 
     # 6. 指标计算（统一使用当前合约的有效数据）
     max_range = round(fut_data['极值差'].max())
@@ -132,7 +132,12 @@ def fetch_future_data(ts_code=None):
     max_gap_down = round(fut_data['低开差'].max())
     min_gap_down = round(fut_data['低开差'].min())
     avg_gap_down = round(fut_data['低开差'].mean())
-
+    rise_fall = fut_data.iloc[0]['收盘价'] - fut_data.iloc[-1]['收盘价']
+    trend = 0
+    if rise_fall > 0:
+        trend = 1
+    elif rise_fall < 0:
+        trend = -1
     # 波动稳定性判断
     cv = round(range_std / avg_range, 2) if avg_range != 0 else 0
     if cv < 0.2:
@@ -151,7 +156,8 @@ def fetch_future_data(ts_code=None):
         "压力位": resistance, "支撑位": support, "最大波动": max_range, "平均波动": avg_range,
         "最小波动": min_range, "最大高开差": max_gap_up, "最小高开差": min_gap_up,
         "平均高开差": avg_gap_up, "最大低开差": max_gap_down, "最小低开差": min_gap_down,
-        "平均低开差": avg_gap_down, "前日结算价": settle_price, "标准差": range_std, "稳定性": stability
+        "平均低开差": avg_gap_down, "前日结算价": settle_price, "标准差": range_std, "稳定性": stability,
+        "涨跌": rise_fall, "走势": trend
     }
 
     shared_data.history_data_analysis = result
@@ -165,12 +171,7 @@ if __name__ == "__main__":
     shared_data.target_days = 10
 
     # 第一次：m2609
-    shared_data.ts_code = "m2609"
-    res1, df1 = fetch_future_data()
-    print("===== m2609 数据 =====", res1, "\n")
-    print(df1)
-    # 第二次：切换 c2609（自动新建缓存，不会混用m2609数据）
     shared_data.ts_code = "c2609"
-    res2, df2 = fetch_future_data()
-    print("===== c2609 数据 =====", res2)
-    print(df2)
+    res1, df1 = fetch_future_data()
+    print(df1)
+    print(res1)

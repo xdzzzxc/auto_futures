@@ -42,7 +42,7 @@ def reget_open_price(ts_code=None):
         # 核心：判断当前是否处于 21:00 ~ 次日 02:00 夜盘区间（不含02点）
         in_night_range = (cur_hour >= 21) or (0 <= cur_hour < 2)
         if not IS_NIGHT_MODE:
-            print_context(f"[{ts_code}] 无夜场交易，程序自动放弃交易！")
+            print_context(f"[{ts_code}] 无夜场交易，15:00:00以后请勿进行交易！")
             return
         # 仅 有夜盘 + 处于夜盘区间 + 未执行过 才进入判断
         if IS_NIGHT_MODE and in_night_range and not TRIGGER_DONE:
@@ -59,7 +59,7 @@ def reget_open_price(ts_code=None):
                 # print_context(f"文件[{tscode_file_path}]的修改时间：{file_mtime}")
                 if file_in_night:
                     # 文件已在夜盘生成，无需再次删除&拉取
-                    print_context(f"[{ts_code}] 检测到夜盘已生成文件，跳过刷新，避免重复请求")
+                    # print_context(f"[{ts_code}] 检测到夜盘已生成文件，跳过刷新，避免重复请求")
                     TRIGGER_DONE = True
                     need_refresh = False
 

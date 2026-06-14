@@ -5,7 +5,7 @@ from public.print_context import print_context
 import random
 from pywinauto.timings import wait_until
 from public.shared_data import ths_lock
-
+from data.db_price import write_price
 
 def get_current_price(ts_code=None):
     is_printed = False
@@ -53,7 +53,7 @@ def get_current_price(ts_code=None):
             if not price_text:
                 sleep(1)
                 continue
-
+            write_price([date_inner, price_text, ts_code])  # 将数据写入品种数据库
             # 存入队列（安全写法）
             with shared_data.deque_lock:
                 shared_data.cur_price_deque.append((date_inner, price_text))
@@ -75,13 +75,13 @@ def get_current_price(ts_code=None):
                     except:
                         continue
 
-                print(f'\r[{datetime.now().strftime("%H:%M:%S")}] '
-                      f'已获取 {len(shared_data.cur_price_deque)} 条 | 最新10条：{latest_10}', end='', flush=True)
+                # print(f'\r[{datetime.now().strftime("%H:%M:%S")}] '
+                #       f'已获取 {len(shared_data.cur_price_deque)} 条 | 最新10条：{latest_10}', end='', flush=True)
 
         except:
             pass
 
-        sleep(5)  # 获取即时品种市场价格的时间间隔设置
+        sleep(shared_data.interval)  # 获取即时品种市场价格的时间间隔设置
 
 if __name__ == "__main__":
     print(shared_data.trade_flag())

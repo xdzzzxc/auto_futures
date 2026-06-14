@@ -59,7 +59,7 @@ def close_ad_windows():
         except:
             continue
 
-    print(f"已关闭广告弹窗：{count} 个")
+    # print(f"已关闭广告弹窗：{count} 个")
 
 if __name__ == "__main__":
     close_ad_windows()

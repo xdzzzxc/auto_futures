@@ -158,21 +158,14 @@ select_future_dict = {
 
 
 def get_future_info(symbol: str) -> Dict[str, Any] | None:
-    """
-    判断期货是否有夜盘
-    输入：如 'm2609' 'jd2605' 'AP2609'
-    输出：True=有夜盘，False=无夜盘
-    采用你说的最优写法：[:-4]
-    """
     symbol = symbol.strip().lower()
-    # code = symbol[:-4]  # 你要的精准截取
     code = ''.join([c for c in symbol if c.isalpha()])
     info_dict: Dict[str, Any] = {"ts_code": symbol, "code": code}
-    d = futures_info[code]
+    try:
+        d = futures_info[code]
+    except KeyError:
+        return None
     info_dict.update(d)
-    is_night = not(code in FUTURES_NO_NIGHT)
-    info_dict["night_trading"] = is_night
-    # print(info_dict)
     return info_dict
 
 
