@@ -4,7 +4,7 @@ from public import shared_data
 from public.jiaoyisuo import futures_info
 import re
 from public.print_context import print_context
-from core.connect_ths import run_ths
+from core.connect_ths import connect_ths
 from core.trade import order
 from log.trade_log import setup_trade_loggers
 from data.collect_current_price import get_current_price
@@ -280,7 +280,7 @@ def _init_shared_data(user_type, target_days, lot_size, interval):
     shared_data.history_data_analysis = analysis_data
     # print_context(f'新浪网历史数据 - 期货交易品种 >>> {shared_data.ts_code}\n{shared_data.history_data_analysis}')
     # exit()
-    run_ths()
+    connect_ths()
 
 
 if __name__ == "__main__":
