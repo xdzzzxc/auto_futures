@@ -8,6 +8,8 @@ import psutil
 # from core.close_ad_window import close_ad_windows
 from public.close_ad_window import close_ad_windows
 from public import shared_data
+from public.shared_data import simulate_input
+
 ths_path = r"C:\同花顺期货通\bin\hexinlauncher.exe"
 # RESTART_COUNT = 0
 # MAX_RESTART_TIMES = 3  # 最多重启6次
@@ -17,12 +19,12 @@ login_ctrl = {'期货户': (1663, 1019, 1697, 1035), '选择用户': (862, 502, 
               '期货密码': (862, 582, 1046, 602), '登录': (840, 647, 1080, 681),
               }
 user_name_dict = {0: "模拟用户", 1: "期货用户"}
-# ctrl_mapping = {}
+subwindow = None  # 定义登录子窗口变量
 
 ths_common_ctrls_dict = {'用户名': (18, 721, 155, 738), '权益': (165, 719, 256, 739),
                          '可用资金': (271, 719, 390, 739), '商品锁': (287, 797, 303, 813),
                          '期货代码': (214, 796, 286, 813), '即时价格': (245, 836, 281, 853),
-                         '平仓': (428, 829, 521, 889), '盈亏': (213, 923, 454, 962),
+                         '平仓': (458, 863, 490, 884), '盈亏': (213, 923, 454, 962),
                          '保证金': (213, 945, 426, 962), '条件单': (272, 988, 311, 1007),
                          '买多': (243, 863, 275, 884), '卖空': (350, 863, 382, 884)}
 
@@ -31,6 +33,7 @@ def start_ths():
     """
     启动同花顺并登录期货交易平台
     """
+    global subwindow
     try_counts = 0
     max_try_counts = 6
     # 1. 先启动同花顺客户端
@@ -95,7 +98,7 @@ def start_ths():
             if subwindow.exists(timeout=0):
                 exist_flag = True
                 break
-        except Exception:
+        except Exception:  # noqa
             # 查找中途控件未渲染，直接跳过本轮
             pass
         wait_cnt += 1
@@ -216,7 +219,7 @@ def local_control():
                 if all(key in win_txt for key in ["保证金", "所"]):
                     if ctrl_mapping['保证金'] is None:
                         ctrl_mapping['保证金'] = [ctrl, rect_tuple, win_txt]
-                if ctrl.element_info.control_type == "Text" and any(key in win_txt for key in ["平多", "平空"]):
+                if is_around(ths_common_ctrls_dict["平仓"][0], l) and is_around(ths_common_ctrls_dict["平仓"][1], t):
                     if ctrl_mapping['平仓'] is None:
                         ctrl_mapping['平仓'] = [ctrl, rect_tuple, win_txt]
                 if any(key in win_txt for key in ["模拟交易", "国泰君安"]):
@@ -237,13 +240,15 @@ def local_control():
                 if is_around(ths_common_ctrls_dict["商品锁"][0], l) and is_around(ths_common_ctrls_dict["商品锁"][1], t):
                     if ctrl_mapping['商品锁'] is None:
                         ctrl_mapping['商品锁'] = [ctrl, rect_tuple, win_txt]
+                        print(ctrl.help_text())
                 if is_around(ths_common_ctrls_dict["盈亏"][0], l) and is_around(ths_common_ctrls_dict["盈亏"][1], t):
                     if ctrl_mapping['盈亏'] is None:
                         ctrl_mapping['盈亏'] = [ctrl, rect_tuple, win_txt]
                 if is_around(ths_common_ctrls_dict["期货代码"][0], l) and is_around(ths_common_ctrls_dict["期货代码"][1], t):
                     if ctrl_mapping['期货代码'] is None:
                         ctrl_mapping['期货代码'] = [ctrl, rect_tuple, win_txt]
-                if is_around(ths_common_ctrls_dict["即时价格"][0], l) and is_around(ths_common_ctrls_dict["即时价格"][1], t):
+
+                if is_around(ths_common_ctrls_dict["即时价格"][0], l, error_range=15) and is_around(ths_common_ctrls_dict["即时价格"][1], t):
                     if ctrl_mapping['即时价格'] is None:
                         ctrl_mapping['即时价格'] = [ctrl, rect_tuple, win_txt]
             except Exception:  # noqa
@@ -271,13 +276,12 @@ def connect_ths():
         start_ths()  # 正常启动同花顺并完成用户登录
         local_control()  # 定位交易窗口所需控件
     else:
-        print("程序检测到同花顺在运行中，为防止登录用户冲突，正在重新启动交易软件······")
+        print("程序检测到同花顺在运行中，为防止登录用户冲突，正在校验用户身份的合法性······")
         restart_ths()
         local_control()
 
 
 if __name__ == '__main__':
     # start_ths()
-
     # connect_ths()
     local_control()

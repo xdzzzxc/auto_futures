@@ -96,7 +96,7 @@ def monitor_profit_loss():
                 # 读取当前实时价格
                 current_price = float(price_ctrl.window_text())
                 # 日志记录即时价位和即时盈亏
-                logger.info(f"current price: {current_price}\nprofit: {profit}")
+                # logger.info(f"current price: {current_price}\nprofit: {profit}")
 
         except (ValueError, Exception):
             sleep(0.5)

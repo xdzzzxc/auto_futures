@@ -11,6 +11,7 @@ from data.collect_current_price import get_current_price
 from data.future_trend import query_future_info
 import tkinter as tk
 from tkinter import ttk
+from tkinter import messagebox
 from data.data_from_sina import fetch_future_data
 from public.sync_time import sync_time
 from core.monitor import monitor_profit_loss
@@ -261,14 +262,48 @@ def select_future():
             shared_data.direction = input_value
             break
 
+def set_stop_loss():
+    win = tk.Tk()
+    win.title("设置止盈止损")
+    win.geometry("260x130")
+    win.resizable(False, False)
+
+    # 默认值0
+    tk.Label(win, text="止盈值：").place(x=30, y=20)
+    e1 = tk.Entry(win, width=15)
+    e1.insert(0, "0")
+    e1.place(x=90, y=20)
+
+    tk.Label(win, text="止损值：").place(x=30, y=50)
+    e2 = tk.Entry(win, width=15)
+    e2.insert(0, "0")
+    e2.place(x=90, y=50)
+
+    def confirm():
+        try:
+            shared_data.pre_profit = float(e1.get())
+            shared_data.pre_loss = float(e2.get())
+            win.destroy()
+            print(f"已手动设置期货品种[{shared_data.ts_code}]的止盈值：{shared_data.pre_profit}元 ； 止损值：{shared_data.pre_loss}元。")
+        except Exception as e:  # noqa
+            messagebox.showerror("错误", "请输入有效数字")
+
+    def cancel():
+        win.destroy()
+        print("请勿按取消按钮，否则程序将关闭应用等待重启！")
+
+    tk.Button(win, text="确定", width=7, command=confirm).place(x=50, y=85)
+    tk.Button(win, text="取消", width=7, command=cancel).place(x=130, y=85)
+    win.mainloop()
+
 def _init_shared_data(user_type, target_days, lot_size, interval):
     print_context("程序正在校验日期、时间 ······")
     sync_time()
     shared_data.user_type = user_type
     shared_data.logger = setup_trade_loggers()
-    select_future()
+    select_future()  # 选择交易的期货品种
     ts_code = shared_data.ts_code
-    # print_context(f"您已选择的期货品种： {ts_code}")
+    set_stop_loss()  # 设置期货品种的固定止损止盈值
     shared_data.target_days = target_days
     shared_data.lot_size = lot_size
     shared_data.interval = interval  # 时间间隔

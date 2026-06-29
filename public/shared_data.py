@@ -1,6 +1,10 @@
 import threading
+from time import sleep
+import random
 from collections import deque
 from datetime import datetime
+
+import pyperclip
 from pywinauto import mouse
 from chinese_calendar import is_holiday  # 纯本地节假日库，一次安装永久用
 
@@ -114,7 +118,32 @@ def click_position(rect_tuple):
     y = rect_tuple[1] + (rect_tuple[3] - rect_tuple[1])//2
     return mouse.click(button='left', coords=(x, y))
 
+def simulate_input(window, ctrl, value):
 
+    if any([window is None, ctrl is None, value is None]):
+        return False
+    pyperclip.copy(value)
+    try:
+        window.set_focus()
+        sleep(random.uniform(0.1, 0.5))
+    except Exception as e:  # noqa
+        print(f"窗口聚焦警告，继续执行：{str(e)}")
+    try:
+        ctrl.click_input()
+        sleep(random.uniform(0.1, 0.5))
+    except Exception as e:  # noqa
+        return False
+
+    try:
+        ctrl.type_keys("^a", with_spaces=True)
+        sleep(random.uniform(0.1, 0.5))
+        ctrl.type_keys("^v", with_spaces=True)
+        sleep(random.uniform(0.1, 0.5))
+        ctrl.type_keys("{ENTER}", with_spaces=True)
+        sleep(random.uniform(0.1, 0.5))
+    except Exception as e:
+        return False
+    return True
 
 
 if __name__ == "__main__":

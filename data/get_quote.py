@@ -89,7 +89,7 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
                     data = json.load(fp)
                 result_data[target_code] = data
                 found_local_file = True
-                print_context.print_context(f"✅ 从本地成功加载数据文件：{file_path}")
+                # print_context.print_context(f"✅ 从本地成功加载数据文件：{file_path}")
                 break
             except:
                 continue
@@ -156,7 +156,7 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
         with open(today_file, "w", encoding="utf-8") as fp:
             json.dump(data_item, fp, ensure_ascii=False, indent=4)
 
-        print(f"✅ 已从网络[{url}]成功获取并保存 <{target_code}> 期货品种的今日开盘价等相关数据>>>\n{data_item}")
+        # print(f"✅ 已从网络[{url}]成功获取并保存 <{target_code}> 期货品种的今日开盘价等相关数据>>>\n{data_item}")
 
     except Exception as e:
         print(f"❌ {target_code}今日开盘信息： 获取失败：\n{str(e)}\n网络来源——{url}\n{'>>'*20} 请手动输入开盘价 {'<<'*20}")

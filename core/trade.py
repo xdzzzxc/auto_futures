@@ -60,8 +60,8 @@ def order(ts_code=None):
         elif not is_night and h == 9 and m < 30 and not is_trade_statue():
             normal_session_trade()
             break
-        else:
-            print(f"\r未达到期货品种[{ts_code}]的交易条件，请等待下单！ - {current_time.strftime('%H:%M:%S')}", flush=True, end="")
+        # else:
+        #     print(f"\r未达到期货品种[{ts_code}]的交易条件，请等待下单！ - {current_time.strftime('%H:%M:%S')}", flush=True, end="")
         sleep(1)  # 轮询间隔为1秒
     else:
         print_context("本次交易时间结束，等待下一个交易日的开盘！")

@@ -8,23 +8,22 @@ from public.shared_data import ths_lock
 from data.db_price import write_price
 
 def get_current_price(ts_code=None):
+    from public.shared_data import simulate_input
     is_printed = False
     if ts_code is None:
         ts_code = shared_data.ts_code if shared_data.ts_code is not None else "m2609"
 
-    if shared_data.ths_common_control['商品锁'][2] == "GeometryGroup.TradeLock":
-        shared_data.ths_common_control['商品锁'][0].click_input()
-        sleep(random.uniform(0.4, 0.5))
     with ths_lock:
         code_ctrl = shared_data.ths_common_control['期货代码'][0]
-
-    shared_data.trade_window.set_focus()
-    wait_until(5, 0.1, code_ctrl.is_enabled)
-    code_ctrl.set_text(ts_code)
-    sleep(random.uniform(0.2, 0.5))
-    code_ctrl.type_keys('{ENTER}')
-    sleep(random.uniform(0.2, 0.5))
-    shared_data.click_position(shared_data.ths_common_control["商品锁"][1])
+        lock_ctrl = shared_data.ths_common_control["商品锁"][0]
+    window = shared_data.trade_window
+    if lock_ctrl.is_enabled():
+        simulate_input(ctrl=code_ctrl, window=window, value=ts_code)
+        lock_ctrl.click_input()
+    else:
+        lock_ctrl.click_input()
+        simulate_input(ctrl=code_ctrl, window=window, value=ts_code)
+        lock_ctrl.click_input()
 
 
     # 主循环
