@@ -47,7 +47,7 @@ futures_info = {
     # ===================== 大商所（DCE） =====================
     'lh': {'exchange': '大商所', 'name': '生猪', 'ext': 'DCE', 'margin': 0.07, 'leverage': 14.29, 'commission': 1.5, 'night_trading': False, 'min_price_change': 1, 'one_tick_profit': 10},
     'jd': {'exchange': '大商所', 'name': '鸡蛋', 'ext': 'DCE', 'margin': 0.07, 'leverage': 14.29, 'commission': 1.5, 'night_trading': False, 'min_price_change': 1, 'one_tick_profit': 10},
-    'm': {'exchange': '大商所', 'name': '豆粕', 'ext': 'DCE', 'margin': 0.07, 'leverage': 14.29, 'commission': 1.5, 'night_trading': True, 'min_price_change': 1, 'one_tick_profit': 10},
+    'm': {'exchange': '大商所', 'name': '豆粕', 'ext': 'DCE', 'margin': 0.07, 'leverage': 14.29, 'commission': 7.5, 'night_trading': True, 'min_price_change': 1, 'one_tick_profit': 10},
     'y': {'exchange': '大商所', 'name': '豆油', 'ext': 'DCE', 'margin': 0.08, 'leverage': 12.5, 'commission': 2.5, 'night_trading': True, 'min_price_change': 2, 'one_tick_profit': 10},
     'p': {'exchange': '大商所', 'name': '棕榈油', 'ext': 'DCE', 'margin': 0.08, 'leverage': 12.5, 'commission': 2.5, 'night_trading': True, 'min_price_change': 2, 'one_tick_profit': 10},
     'c': {'exchange': '大商所', 'name': '玉米', 'ext': 'DCE', 'margin': 0.05, 'leverage': 20.0, 'commission': 1.2, 'night_trading': False, 'min_price_change': 1, 'one_tick_profit': 10},

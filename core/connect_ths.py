@@ -257,7 +257,7 @@ def local_control():
 
         none_count = sum(1 for v in ctrl_mapping.values() if v is None)
         if none_count == 0:
-            print(f" >>> 已准确定位到全部所需控件！")
+            print(f"\r >>>>>>>>>>>> 已准确定位到全部所需控件 <<<<<<<<<<<<")
             break
         else:
             print(f"\r正在定位应用所需的控件：{local_control_count - none_count} - {[k for k, v in ctrl_mapping.items() if v is not None]}", flush=True, end="")
@@ -295,5 +295,5 @@ def connect_ths():
 
 if __name__ == '__main__':
     # start_ths()
-    # connect_ths()
-    local_control()
+    connect_ths()
+    # local_control()

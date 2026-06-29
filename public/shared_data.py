@@ -121,6 +121,7 @@ def click_position(rect_tuple):
 def simulate_input(window, ctrl, value):
 
     if any([window is None, ctrl is None, value is None]):
+        print(f"本次操作失败，请结合检测参数结果作出修改：\nwindow-{window}; ctrl-{ctrl}; value-{value}")
         return False
     pyperclip.copy(value)
     try:
@@ -133,7 +134,6 @@ def simulate_input(window, ctrl, value):
         sleep(random.uniform(0.1, 0.5))
     except Exception as e:  # noqa
         return False
-
     try:
         ctrl.type_keys("^a", with_spaces=True)
         sleep(random.uniform(0.1, 0.5))

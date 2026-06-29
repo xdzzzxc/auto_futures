@@ -48,16 +48,16 @@ def monitor_profit_loss():
 
     """监视动态价格变化，完成自动平仓"""
     print_context(f'程序正处于交易动态监控中，包括对自动下单和手动下单的交易监控都有自动平仓功能，请谨慎操作！')
-    if shared_data.order_param_dict:
-        logger.info(f"[{shared_data.ts_code}]下单参数：\n{shared_data.order_param_dict}")
-
-    if shared_data.history_data_analysis:
-        logger.info(f"[{shared_data.ts_code}]新浪历史交易数据分析：\n{shared_data.history_data_analysis}")
-    if shared_data.open_price:
-        logger.info(f"[{shared_data.ts_code}]今日开盘信息[东财网]:\n{shared_data.open_price}")
-
-    if shared_data.trade_menu_dict:
-        logger.info(f"程序已自动下单，成交参数：{shared_data.trade_menu_dict}\n{'=^=' * 40}")
+    # if shared_data.order_param_dict:
+    #     logger.info(f"[{shared_data.ts_code}]下单参数：\n{shared_data.order_param_dict}")
+    #
+    # if shared_data.history_data_analysis:
+    #     logger.info(f"[{shared_data.ts_code}]新浪历史交易数据分析：\n{shared_data.history_data_analysis}")
+    # if shared_data.open_price:
+    #     logger.info(f"[{shared_data.ts_code}]今日开盘信息[东财网]:\n{shared_data.open_price}")
+    #
+    # if shared_data.trade_menu_dict:
+    #     logger.info(f"程序已自动下单，成交参数：{shared_data.trade_menu_dict}\n{'=^=' * 40}")
 
     no_print = True  # 只打印一次防止刷屏
 
