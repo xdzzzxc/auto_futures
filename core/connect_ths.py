@@ -3,6 +3,7 @@ from pywinauto import Application, mouse
 from time import sleep
 import random
 import os
+from public.shared_data import ths_lock
 from public.print_context import print_context
 import psutil
 # from core.close_ad_window import close_ad_windows
@@ -279,7 +280,18 @@ def connect_ths():
         print("程序检测到同花顺在运行中，为防止登录用户冲突，正在校验用户身份的合法性······")
         restart_ths()
         local_control()
-
+    # 在交易界面窗口锁定交易品种，以确保读取对应品种的即时价位
+    with ths_lock:
+        code_ctrl = shared_data.ths_common_control['期货代码'][0]
+        lock_ctrl = shared_data.ths_common_control["商品锁"][0]
+    window = shared_data.trade_window
+    if lock_ctrl.is_enabled():
+        simulate_input(ctrl=code_ctrl, window=window, value=shared_data.ts_code)
+        lock_ctrl.click_input()
+    else:
+        lock_ctrl.click_input()
+        simulate_input(ctrl=code_ctrl, window=window, value=shared_data.ts_code)
+        lock_ctrl.click_input()
 
 if __name__ == '__main__':
     # start_ths()

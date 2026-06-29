@@ -47,7 +47,7 @@ def monitor_profit_loss():
             print_context(f"平仓失败：{str(e)}")
 
     """监视动态价格变化，完成自动平仓"""
-    print_context(f'交易状态动态监控中 ......')
+    print_context(f'程序正处于交易动态监控中，包括对自动下单和手动下单的交易监控都有自动平仓功能，请谨慎操作！')
     if shared_data.order_param_dict:
         logger.info(f"[{shared_data.ts_code}]下单参数：\n{shared_data.order_param_dict}")
 

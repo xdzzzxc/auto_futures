@@ -12,9 +12,9 @@ logger = setup_trade_loggers()
 
 def opening_session_trade(ts_code=None):
     ts_code = shared_data.ts_code if ts_code is None else ts_code
-    logger.info(f'交易品种属性：{shared_data.open_price}')
-    logger.info(f"交易品种[{ts_code}]的历史交易数据汇总：\n{shared_data.history_data_analysis}")
-    logger.info(f"交易品种基本属性：{shared_data.ts_code_attribute_dict}")
+    logger.info(f'[{ts_code}]本交易日开盘价信息：{shared_data.open_price}')
+    logger.info(f"[{ts_code}]历史交易数据汇总：\n{shared_data.history_data_analysis}")
+    logger.info(f"[{ts_code}]基本属性：{shared_data.ts_code_attribute_dict}")
     while True:
 
         break

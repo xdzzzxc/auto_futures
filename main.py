@@ -313,8 +313,6 @@ def _init_shared_data(user_type, target_days, lot_size, interval):
     # 加入新浪历史交易数据
     analysis_data, fut_data = fetch_future_data(ts_code=shared_data.ts_code)
     shared_data.history_data_analysis = analysis_data
-    # print_context(f'新浪网历史数据 - 期货交易品种 >>> {shared_data.ts_code}\n{shared_data.history_data_analysis}')
-    # exit()
     connect_ths()
 
 
@@ -333,7 +331,8 @@ if __name__ == "__main__":
     price_thread.start()
     order_thread.start()
     monitor_thread.start()
-    print_context("✅ 所有量化交易线程启动成功！")
+    print_context(f"✅ 所有量化交易线程启动成功 >>>\n获取期货品种即时行情线程-collect_current_price(PriceThread)"
+                  f"\n订单线程-trade.order(OrderThread)\n自动交易监控线程-monitor.monitor(MonitorThread)")
     sleep(5)
     reget_open_price_thread.start()
     anti_screensaver_thread()
