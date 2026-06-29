@@ -282,7 +282,7 @@ def set_stop_loss():
     def confirm():
         try:
             shared_data.pre_profit = float(e1.get())
-            shared_data.pre_loss = float(e2.get())
+            shared_data.pre_loss = -abs(float(e2.get()))
             win.destroy()
             print(f"已手动设置期货品种[{shared_data.ts_code}]的止盈值：{shared_data.pre_profit}元 ； 止损值：{shared_data.pre_loss}元。")
         except Exception as e:  # noqa
