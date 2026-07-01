@@ -123,6 +123,7 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
         item = res.json()["data"]["diff"][0]
 
         data_item = {
+            "date": datetime.now().strftime("%Y%m%d %H:%M:%S"),
             "tscode": target_code,
             "exchange": exchange,
             "open": item.get("f17", 0.0),

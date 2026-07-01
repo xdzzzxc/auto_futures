@@ -9,7 +9,7 @@ from pywinauto import mouse
 from chinese_calendar import is_holiday  # 纯本地节假日库，一次安装永久用
 
 user_type = 0  # 0-模拟用户  1-国泰君安期货用户
-user_name = ""  # 模拟交易-1811889418 国泰君安_CTP85415809
+user_name = {0: "模拟交易-1811889418", 1: "国泰君安_CTP85415809"}  # 模拟交易-1811889418 国泰君安_CTP85415809
 trade_window = None  # 同花顺交易平台桌面对象
 current_price_dict = {}  # 即时行情中的期货商品买卖价格
 cur_price_deque = deque(maxlen=20000)
@@ -126,6 +126,7 @@ def simulate_input(window, ctrl, value):
     pyperclip.copy(value)
     try:
         window.set_focus()
+        window.maximize()
         sleep(random.uniform(0.1, 0.5))
     except Exception as e:  # noqa
         print(f"窗口聚焦警告，继续执行：{str(e)}")

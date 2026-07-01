@@ -16,18 +16,15 @@ def get_current_price(ts_code=None):
     with ths_lock:
         code_ctrl = shared_data.ths_common_control['期货代码'][0]
         lock_ctrl = shared_data.ths_common_control["商品锁"][0]
-    code_ctrl_text = code_ctrl.window_text().strip()
-    print(f"获取品种即时行情价前确认是否是交易品种代码，检测结果>{code_ctrl_text} - {ts_code==code_ctrl}")
-    if code_ctrl_text != ts_code:
-        window = shared_data.trade_window
-        if lock_ctrl.is_enabled():
-            simulate_input(ctrl=code_ctrl, window=window, value=ts_code)
-            lock_ctrl.click_input()
-        else:
-            lock_ctrl.click_input()
-            simulate_input(ctrl=code_ctrl, window=window, value=ts_code)
-            lock_ctrl.click_input()
-
+    # 在期货代码控件内锁定交易品种以获取即时行情价格
+    window = shared_data.trade_window
+    if lock_ctrl.is_enabled():
+        simulate_input(ctrl=code_ctrl, window=window, value=ts_code)
+        lock_ctrl.click_input()
+    else:
+        lock_ctrl.click_input()
+        simulate_input(ctrl=code_ctrl, window=window, value=ts_code)
+        lock_ctrl.click_input()
 
     # 主循环
     while True:
@@ -39,11 +36,9 @@ def get_current_price(ts_code=None):
                 is_printed = True
             sleep(0.5)
             continue
-
         # 交易时间
         is_printed = False
         date_inner = datetime.now().strftime("%Y%m%d%H%M%S")
-
         # ====================== 【核心修复：安全读取价格】 ======================
         try:
             # 加锁读取界面控件（防止多线程崩溃）
@@ -59,13 +54,11 @@ def get_current_price(ts_code=None):
             # 存入队列（安全写法）
             with shared_data.deque_lock:
                 shared_data.cur_price_deque.append((date_inner, price_text))
-
         except Exception as e:  # noqa
             # 读取失败不崩溃，跳过即可
             # print_context(f"价格读取异常：{str(e)}")
             sleep(1)
             continue
-
         # ====================== 【安全打印最近10条价格】 ======================
         try:
             with shared_data.dict_lock:
@@ -76,10 +69,6 @@ def get_current_price(ts_code=None):
                         latest_10.append(float(item[1].strip()))
                     except:
                         continue
-
-                # print(f'\r[{datetime.now().strftime("%H:%M:%S")}] '
-                #       f'已获取 {len(shared_data.cur_price_deque)} 条 | 最新10条：{latest_10}', end='', flush=True)
-
         except:
             pass
 
