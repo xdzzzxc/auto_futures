@@ -117,7 +117,7 @@ def write_price(price_list):
 @_retry_on_lock()  # ← 新增：重试装饰器
 def read_db(full_ts_code, start_time=None, end_time=None, counts=None, ascending=False):
     """
-    读取合约数据并转为DataFrame
+    读取合约数据并转为DataFrame,已区分日盘和夜盘；
     :param full_ts_code: 完整合约代码，如 m2609
     :param start_time: 起始时间(字符串，格式: YYYYMMDDHHMMSS)，不传则不限制
     :param end_time: 结束时间(字符串，格式: YYYYMMDDHHMMSS)，不传则不限制

@@ -18,13 +18,14 @@ def get_current_price(ts_code=None):
         lock_ctrl = shared_data.ths_common_control["商品锁"][0]
     # 在期货代码控件内锁定交易品种以获取即时行情价格
     window = shared_data.trade_window
-    if lock_ctrl.is_enabled():
-        simulate_input(ctrl=code_ctrl, window=window, value=ts_code)
-        lock_ctrl.click_input()
-    else:
-        lock_ctrl.click_input()
-        simulate_input(ctrl=code_ctrl, window=window, value=ts_code)
-        lock_ctrl.click_input()
+    if code_ctrl.window_text() != ts_code:
+        if lock_ctrl.is_enabled():
+            simulate_input(ctrl=code_ctrl, window=window, value=ts_code)
+            lock_ctrl.click_input()
+        else:
+            lock_ctrl.click_input()
+            simulate_input(ctrl=code_ctrl, window=window, value=ts_code)
+            lock_ctrl.click_input()
 
     # 主循环
     while True:

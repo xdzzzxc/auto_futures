@@ -13,6 +13,7 @@ user_name = {0: "模拟交易-1811889418", 1: "国泰君安_CTP85415809"}  # 模
 trade_window = None  # 同花顺交易平台桌面对象
 current_price_dict = {}  # 即时行情中的期货商品买卖价格
 cur_price_deque = deque(maxlen=20000)
+read_price_mode = True  # 读取期货品种的当日价格模式：默认是deque数据-True;db数据库数据-False;
 deque_lock = threading.Lock()
 interval = 5  # 从同花顺窗口读取即时价格的时间间隔，默认为5秒
 login_control = {}  # 登录期货通交易软件
@@ -38,6 +39,7 @@ future_info_dict = {}  # 期货资讯行情
 # "交易方向", "交易价", "止损价", "止盈价", "交易前总额", "交易后总额", "利润"
 trade_menu_dict = {}  # 成交后的交易参数,在trade.py模块中产生
 ts_code_attribute_dict = {}  # 交易品种的基本属性
+BIN_NUM = 8  # 配置参数：箱体数量，日内短线推荐8个等宽箱体
 # min_price_change = 0.00  # 最小跳点数
 # commission = 0.0  # 期货商品的每一手的手续费
 # leverage = 0.0  # 盈利杠杆,用来计算实时盈亏：差价 * 杠杆比例
@@ -145,6 +147,22 @@ def simulate_input(window, ctrl, value):
     except Exception as e:
         return False
     return True
+
+def get_data_cache_dir(marker=None):
+    from pathlib import Path
+    if marker is None:
+        marker = [".git", "requirements.txt", "main.py"]
+    p = Path(__file__).resolve()
+    root_dir = None
+    for parent in p.parents:
+        if any((parent / m).exists() for m in marker):
+            root_dir = parent
+            break
+    if root_dir is None:
+        raise FileNotFoundError("找不到项目根目录标记文件")
+    cache_folder = root_dir / "data" / "futures_data"
+    cache_folder.mkdir(parents=True, exist_ok=True)
+    return str(cache_folder)
 
 
 if __name__ == "__main__":

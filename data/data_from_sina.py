@@ -11,6 +11,7 @@ import pandas as pd
 import numpy as np
 from public import shared_data
 from public.print_context import print_context
+from public.shared_data import get_data_cache_dir
 
 # 列名中英文映射
 zh_en_dict = {
@@ -40,7 +41,9 @@ def fetch_future_data(ts_code=None):
         return None, None
 
     today = datetime.now().strftime("%Y%m%d")
-    cache_folder = os.path.join(os.getcwd(), "futures_data", "sina_data")
+    # 获取数据缓存目录路径:\\auto_futures\data\futures_data\sina_data
+    cache_folder = get_data_cache_dir()
+    cache_folder = os.path.join(cache_folder, "sina_data")
     os.makedirs(cache_folder, exist_ok=True)
 
     # 2. 缓存文件名：【合约代码_日期】，多品种彻底隔离，核心防串数据

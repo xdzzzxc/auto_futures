@@ -74,8 +74,9 @@ def reget_open_price(ts_code=None):
 
                 # 重新获取开盘价
                 get_open_price(ts_code=ts_code)
+                print_context(f"重新获取的{ts_code}开盘信息：{shared_data.open_price}")
                 TRIGGER_DONE = True
-                print_context(f"重新获取期货品种[{ts_code}]的夜盘开盘价")
+                # print_context(f"重新获取期货品种[{ts_code}]的夜盘开盘价")
 
             break  # 本轮逻辑结束，退出轮询
 

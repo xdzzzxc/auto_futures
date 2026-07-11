@@ -7,7 +7,7 @@ from time import sleep
 from public.jiaoyisuo import futures_info
 from public.agent import get_headers
 from public import shared_data, print_context
-
+from public.shared_data import get_data_cache_dir
 import ctypes
 from ctypes import wintypes
 
@@ -34,9 +34,10 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
     while True:
         cur_time = datetime.now().strftime("%H:%M:%S")
         if is_in_restrict_time():
-            if no_print:
-                print_context.print_context(f"\r未到开市时间，暂不能获取期货品种的开盘信息，请等待！  当前时间：{cur_time}", end="", flush=True)
-                no_print = False
+            print(f"\r未到开市时间[日盘>9:00，夜盘>21:00]，请等待！  当前时间：{cur_time}", end="", flush=True)
+            # if no_print:
+            #     print(f"\r未到开市时间，暂不能获取期货品种的开盘信息，请等待！  当前时间：{cur_time}", end="", flush=True)
+            #     no_print = False
             sleep(1)
             continue
         else:
@@ -55,8 +56,9 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
     now = datetime.now()
     today_str = now.strftime("%Y%m%d")
     two_days_ago_str = (now - timedelta(days=2)).strftime("%Y%m%d")
-
-    cache_folder = os.path.join(os.getcwd(), "futures_data")
+    # 获取数据缓存目录路径:\\auto_futures\data\futures_data\open_price
+    cache_folder = get_data_cache_dir()
+    cache_folder = os.path.join(cache_folder, "open_price")
     os.makedirs(cache_folder, exist_ok=True)
 
     # ==================== 第一步：清理2天前的缓存 ====================
@@ -89,7 +91,7 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
                     data = json.load(fp)
                 result_data[target_code] = data
                 found_local_file = True
-                # print_context.print_context(f"✅ 从本地成功加载数据文件：{file_path}")
+                print_context.print_context(f"✅ 从本地成功加载数据文件：{file_path}")
                 break
             except:
                 continue
@@ -157,7 +159,7 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
         with open(today_file, "w", encoding="utf-8") as fp:
             json.dump(data_item, fp, ensure_ascii=False, indent=4)
 
-        # print(f"✅ 已从网络[{url}]成功获取并保存 <{target_code}> 期货品种的今日开盘价等相关数据>>>\n{data_item}")
+        print(f"✅ 已从网络[{url}]成功获取并保存 <{target_code}> 期货品种的今日开盘价等相关数据>>>\n{data_item}")
 
     except Exception as e:
         print(f"❌ {target_code}今日开盘信息： 获取失败：\n{str(e)}\n网络来源——{url}\n{'>>'*20} 请手动输入开盘价 {'<<'*20}")
@@ -183,6 +185,7 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
             exit()
 
         result_data[target_code] = {
+            "date": datetime.now().strftime("%Y%m%d %H:%M:%S"),
             "tscode": target_code,
             "open": float(open_price_input),
             "pre_settle": float(pre_settle_input),
@@ -200,5 +203,5 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
 
 
 if __name__ == '__main__':
-    print(get_open_price(ts_code="c2609"))
+    print(get_open_price(ts_code="jd2609"))
     # print(is_in_restrict_time())

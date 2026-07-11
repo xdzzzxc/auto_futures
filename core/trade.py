@@ -1,5 +1,8 @@
 from time import sleep
 from datetime import datetime
+
+import pandas as pd
+import numpy as np
 from public.jiaoyisuo import get_future_info
 from public import shared_data
 from public.print_context import print_context
@@ -8,17 +11,50 @@ from public.shared_data import click_position, is_trade_statue
 from log.trade_log import setup_trade_loggers
 from data.get_quote import get_open_price
 from data.data_from_sina import fetch_future_data
+from data.db_price import read_db
 logger = setup_trade_loggers()
+pd.set_option("display.max_rows", None)
+
+# 分箱分析当日交易价格
+def bin_analyzer(ts_code=None, bin_num=None):
+    ts_code = ts_code if ts_code is not None else shared_data.ts_code
+    bin_num = bin_num if bin_num is not None else shared_data.BIN_NUM
+    # 获取期货品种ts_code的今日开盘价等信息
+    open_info = get_open_price(ts_code)
+    print(open_info)
+    open_price = open_info[ts_code]['open']
+    print(f'[{ts_code}]开盘价：{open_price}')
+    df = read_db(full_ts_code=ts_code, counts=1000, start_time="20260615090000", end_time="20260615113000")
+
+    # print(df)
+    df["bin"], bin_edges = pd.cut(
+        df["price"],
+        bins=bin_num,
+        retbins=True,
+        include_lowest=True,
+        precision=2
+    )
+    bin_edges = np.round(bin_edges, 2)
+    print(df)
+    print("=" * 80)
+    print(bin_edges)
+
+
 
 def opening_session_trade(ts_code=None):
     ts_code = shared_data.ts_code if ts_code is None else ts_code
     logger.info(f'[{ts_code}]本交易日开盘价信息：{shared_data.open_price}')
     logger.info(f"[{ts_code}]历史交易数据汇总：\n{shared_data.history_data_analysis}")
     logger.info(f"[{ts_code}]基本属性：{shared_data.ts_code_attribute_dict}")
-    while True:
 
+
+    while True:
+        bin_analyzer()
         break
 
+
+        sleep(10)
+        break
 
 def normal_session_trade():
     # while True:
@@ -181,5 +217,6 @@ def order(ts_code=None):
 
 # ===================== 启动 =====================
 if __name__ == "__main__":
-    order(ts_code="m2609")
-    opening_session_trade(ts_code="m2609")
+    # order(ts_code="m2609")
+    # opening_session_trade(ts_code="jd2609")
+    bin_analyzer(ts_code="jd2609", bin_num=None)

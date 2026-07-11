@@ -253,7 +253,7 @@ def local_control():
                 if is_around(ths_common_ctrls_dict["商品锁"][0], l) and is_around(ths_common_ctrls_dict["商品锁"][1], t):
                     if ctrl_mapping['商品锁'] is None:
                         ctrl_mapping['商品锁'] = [ctrl, rect_tuple, win_txt]
-                        print(ctrl.help_text())
+                        # print(f"商品锁的help属性值：{ctrl.element_info.raw_control.help_text}")
                 if is_around(ths_common_ctrls_dict["盈亏"][0], l) and is_around(ths_common_ctrls_dict["盈亏"][1], t):
                     if ctrl_mapping['盈亏'] is None:
                         ctrl_mapping['盈亏'] = [ctrl, rect_tuple, win_txt]
@@ -285,22 +285,24 @@ def local_control():
 
     code_ctrl = shared_data.ths_common_control['期货代码'][0]
     lock_ctrl = shared_data.ths_common_control["商品锁"][0]
-
     window = UIAWrapper(shared_data.trade_window.element_info)
-    ts_code = shared_data.ts_code or "jd2609"
-    print(f"期货代码控件的可用属性：{code_ctrl.is_enabled()} - {code_ctrl.window_text()}")
-
-    if code_ctrl.is_enabled():
-        print(f"期货代码控件的可用属性：{code_ctrl.is_enabled()}")
-        simulate_input(ctrl=code_ctrl, window=window, value=ts_code)
-        lock_ctrl.click_input()
-    else:
-        print(f"期货代码控件的不可用属性：{code_ctrl.is_enabled()}")
-        lock_ctrl.click_input()
-        simulate_input(ctrl=code_ctrl, window=window, value=ts_code)
-        lock_ctrl.click_input()
-    for n,(k, v) in enumerate(ctrl_mapping.items()):
-        print(f"{n+1}.{k}: {v}")
+    ts_code = shared_data.ts_code or "m2609"
+    # print(f"期货代码控件的可用属性：{code_ctrl.is_enabled()} - {code_ctrl.window_text()}")
+    # print(f"商品锁控件的可点击属性：{lock_ctrl.is_enabled()}")
+    if code_ctrl.window_text() != ts_code:
+        if code_ctrl.is_enabled():
+            # print(f"期货代码控件的可用属性：{code_ctrl.is_enabled()}")
+            simulate_input(ctrl=code_ctrl, window=window, value=ts_code)
+            lock_ctrl.click_input()
+        else:
+            # print(f"期货代码控件的不可用属性：{code_ctrl.is_enabled()}")
+            lock_ctrl.click_input()
+            simulate_input(ctrl=code_ctrl, window=window, value=ts_code)
+            lock_ctrl.click_input()
+        if code_ctrl.is_enabled():
+            lock_ctrl.click_input()
+    # for n,(k, v) in enumerate(ctrl_mapping.items()):
+    #     print(f"{n+1}.{k}: {v}")
 
 
 if __name__ == '__main__':
