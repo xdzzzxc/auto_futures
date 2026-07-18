@@ -1,7 +1,7 @@
 from datetime import datetime
 from pywinauto import Application, mouse
 from time import sleep
-import time
+from public.anti_screensaver import kill_unprotected_process
 import random
 import os
 from pywinauto.controls.uiawrapper import UIAWrapper
@@ -340,7 +340,70 @@ def local_control():
             lock_ctrl.click_input()
 
 
+def set_loss_profit(param: dict=None):
+    if param is None:
+        param = shared_data.order_param_dict.copy()  # 即时行情价分析结果
+    app = None
+    # ths_window = None
+    fut_code = shared_data.ts_code or "m2609"
+
+    def set_price(drill_type: str, price):
+        if shared_data.trade_window is not None:
+            ths_window = shared_data.trade_window
+        else:
+            ths_pid = get_happ_pid()
+            app = Application(backend="uia").connect(process=ths_pid, timeout=10)
+            ths_window = app.top_window()
+        ths_window.set_focus()
+        # 定位”持仓"控件，设置前点击它确保显示期货代码控件可点
+        position_text_ctrl = ths_window.child_window(control_type="Text", title="持仓")
+        position_text_ctrl.wait("visible", timeout=3)
+        position_text_ctrl.click_input()
+        # print(f'同花顺窗口的标题：{ths_window.window_text()}')
+        fut_code_ctrl = ths_window.child_window(control_type="Text", title=fut_code)
+        fut_code_ctrl.wait("visible", timeout=3)
+        # print(f"fut_code_ctrl：{fut_code_ctrl.window_text()}")
+        fut_code_ctrl.right_click_input()
+
+        context_menu = app.top_window()
+        context_menu.wait("visible", timeout=3)
+        stop_loss_profit_item = context_menu.child_window(
+            control_type="MenuItem",
+            title="止损止盈"
+        )
+        # print(f"stop_loss_item: {stop_loss_profit_item.window_text()}")
+        stop_loss_profit_item.click_input()
+        rect = stop_loss_profit_item.rectangle()
+        # print(f"cx: {rect.left}, cy: {rect.top}")
+        mouse.click(button="left", coords=(rect.right + 50, rect.top + 20))
+        # 杀屏保程序，以防在启动止损止盈设置时出现遮挡
+        kill_unprotected_process()
+        print("已完成屏保、壁纸等遮挡处理！")
+        create_win = ths_window.child_window(control_type="Window", title="云止损单")
+        create_win.wait("visible", timeout=3)
+
+        cloud_ctrl = ths_window.child_window(control_type="Text", title=drill_type)
+        cloud_ctrl.wait("visible", timeout=3)
+        cloud_ctrl.click_input()
+        edit_ctrl = create_win.descendants(control_type="Edit")[0]
+        sleep(0.5)
+        edit_ctrl.set_text(price)
+        create_text = ths_window.child_window(control_type="Text", title="创建")
+        create_text.wait("visible", timeout=3)
+        create_text.click_input()
+
+    for drill_type, price in param.items():
+        if price is not None:
+            print(f"[{fut_code} {drill_type}] 设置完毕！")
+            set_price(drill_type, price)
+        else:
+            print(f"跳过[{fut_code} {drill_type}] 设置！")
+            continue
+
+
+
 
 if __name__ == '__main__':
-    check_ths_status()
+    # check_ths_status()
     # local_control()
+    set_loss_profit()

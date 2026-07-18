@@ -16,7 +16,7 @@ from data.data_from_sina import fetch_future_data
 from public.sync_time import sync_time
 from core.monitor import monitor_profit_loss
 from data.get_quote import get_open_price
-from public.anti_screensaver import anti_screensaver_thread
+from public.anti_screensaver import kill_unprotected_process
 from data.reget_open_price import reget_open_price
 from main_monitor.run_monitor import run_monitor
 
@@ -346,7 +346,7 @@ def _init_shared_data(user_type, target_days, lot_size=1, interval=5):
 
 if __name__ == "__main__":
     _init_shared_data(
-        user_type=1,  # 0虚拟用户，1国泰君安期货用户
+        user_type=0,  # 0虚拟用户，1国泰君安期货用户
         target_days=5,  # 期货品种历史交易日数据，从前一个交易日往前推
         lot_size=1,  # 交易手数，不同期货品种有不同的最低交易手数
         interval=5  # 每5秒获取一次品种价格
@@ -363,8 +363,8 @@ if __name__ == "__main__":
                   f"\n订单线程-trade.order(OrderThread)\n自动交易监控线程-monitor.monitor(MonitorThread)")
     sleep(5)
     reget_open_price_thread.start()
-    anti_thread = threading.Thread(target=anti_screensaver_thread, daemon=True)
-    anti_thread.start()
+    # anti_thread = threading.Thread(target=kill_unprotected_process, daemon=True)  # 屏保程序可以在需要的时候单独运行
+    # anti_thread.start()
     # anti_screensaver_thread()
     try:
         while True:

@@ -1,83 +1,66 @@
-import threading
-import time
-import ctypes
-from ctypes import Structure, c_uint, c_long, c_ulong, POINTER
-from public.close_ad_window import close_ad_windows
+import psutil
+import win32gui
+import win32process
+from time import sleep
 
-user32 = ctypes.WinDLL('user32', use_last_error=True)
+# 白名单：系统保护进程 + 常驻软件
+WHITE_PROC_NAMES = {
+    "system", "svchost.exe", "explorer.exe", "ntoskrnl.exe", "winlogon.exe",
+    "csrss.exe", "smss.exe", "services.exe", "dwm.exe", "taskmgr.exe",
+    "conhost.exe", "wlanext.exe", "spoolsv.exe", "lsass.exe", "fontdrvhost.exe",
+    "rundll32.exe", "mmc.exe", "wininit.exe", "textinputhost.exe",
+    "pycharm64.exe", "360se.exe", "360tray.exe", "wechat.exe", "doubao.exe", "pycharm.exe",
+    "hexinlauncher.exe", "happ.exe"
+}
+# 唯一允许关闭的系统类进程：屏保
+SCREEN_SAVER = "scrnsave.scr"
 
-class MOUSEINPUT(Structure):
-    _fields_ = [
-        ("dx", c_long),
-        ("dy", c_long),
-        ("mouseData", c_ulong),
-        ("dwFlags", c_ulong),
-        ("time", c_ulong),
-        ("dwExtraInfo", POINTER(c_ulong))
-    ]
 
-class INPUT(Structure):
-    class _INPUT(ctypes.Union):
-        _fields_ = [("mi", MOUSEINPUT)]
-    _anonymous_ = ("_input",)
-    _fields_ = [("type", c_uint), ("_input", _INPUT)]
+def get_all_visible_window_info():
+    """函数1：获取全部可视窗口 pid、进程名、标题"""
+    window_list = []
 
-INPUT_MOUSE = 0
-MOUSEEVENTF_MOVE = 0x0001
-
-def auto_close_popup():
-    while True:
-        try:
-            close_ad_windows()
-            # 新增：专门查杀全屏壁纸/锁屏窗口
-            enum_windows_kill_wallpaper()
-        except Exception:
-            pass
-        time.sleep(30)
-
-def anti_screensaver():
-    while True:
-        move1 = INPUT()
-        move1.type = INPUT_MOUSE
-        move1.mi.dx = 1
-        move1.mi.dy = 0
-        move1.mi.dwFlags = MOUSEEVENTF_MOVE
-
-        move2 = INPUT()
-        move2.type = INPUT_MOUSE
-        move2.mi.dx = -1
-        move2.mi.dy = 0
-        move2.mi.dwFlags = MOUSEEVENTF_MOVE
-
-        inputs = (INPUT * 2)(move1, move2)
-        user32.SendInput(2, inputs, ctypes.sizeof(INPUT))
-        time.sleep(15)  # 缩短间隔，更稳重置闲置计时器
-
-# 新增：遍历窗口，关闭全屏壁纸锁屏弹窗
-def enum_windows_kill_wallpaper():
-    def callback(hwnd, extra):
-        if not user32.IsWindowVisible(hwnd):
+    def enum_callback(hwnd, _):
+        if not win32gui.IsWindowVisible(hwnd):
             return True
-        buf = ctypes.create_unicode_buffer(256)
-        user32.GetWindowTextW(hwnd, buf, 256)
-        win_name = buf.value.lower()
-        # 匹配常见壁纸/锁屏关键词，按需扩充
-        keyword_list = ["壁纸", "锁屏", "杂志", "桌面助手", "sogou", "360wallpaper"]
-        for kw in keyword_list:
-            if kw in win_name:
-                user32.PostMessageW(hwnd, 0x0010, 0, 0)  # WM_CLOSE 关闭窗口
-                break
+        title = win32gui.GetWindowText(hwnd).strip()
+        _, pid = win32process.GetWindowThreadProcessId(hwnd)
+        proc_name = "未知进程"
+        try:
+            proc = psutil.Process(pid)
+            proc_name = proc.name().lower()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+        window_list.append({"pid": pid, "proc_name": proc_name, "title": title})
         return True
 
-    enum_proc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)(callback)
-    user32.EnumWindows(enum_proc, 0)
+    win32gui.EnumWindows(enum_callback, 0)
+    return window_list
 
-def anti_screensaver_thread():
-    screen_thread = threading.Thread(target=anti_screensaver, daemon=True)
-    screen_thread.start()
-    close_thread = threading.Thread(target=auto_close_popup, daemon=True)
-    close_thread.start()
-    print("✅ 程序已在后台启动防锁屏/屏保+自动查杀壁纸弹窗功能")
 
-if __name__ == '__main__':
-    anti_screensaver()
+def kill_unprotected_process():
+    """函数2：常驻循环查杀，单独开线程执行，无需传入window_data"""
+
+    # 关键：每一轮都重新采集最新窗口列表
+    window_data = get_all_visible_window_info()
+    for item in window_data:
+        pid = item["pid"]
+        p_name = item["proc_name"]
+        title = item["title"]
+
+        # 白名单进程跳过，屏保强制关闭
+        if p_name in WHITE_PROC_NAMES and p_name != SCREEN_SAVER:
+            continue
+
+        try:
+            psutil.Process(pid).terminate()
+            print(f"已关闭 >>> PID:{pid} | 进程名:{p_name} | 窗口标题:{title}")
+        except psutil.NoSuchProcess:
+            continue
+        except Exception as e:
+            print(f"PID {pid} 关闭失败: {e}")
+
+
+if __name__ == "__main__":
+    # 调试入口，仅调用两个函数
+    kill_unprotected_process()

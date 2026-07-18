@@ -33,7 +33,7 @@ lot_size = 1  # 期货买卖手数，默认值1，不同商品规定必须最少
 direction = ""  # 如果有专业推荐，直接写买多-Rise、卖空-Fall，否则由历史数据与今日开盘价来确定多空方向
 history_trade_df = None  # 期货品种历史交易原始数据，dataframe格式；
 history_data_analysis = {}  # 期货商品历史交易数据，来源于future_data模块
-order_param_dict = {}  # 期货商品行情下单参数：字典键顺序-"建仓交易时间", "平仓交易时间", "用户", "期货品种",
+order_param_dict = {"云止损单": 3120, "云止盈单": 3050, "云保本单": None}  # 对应止损止盈设置
 future_quote_dict = {}  # 期货行情 https://push2.eastmoney.com/api/qt/ulist.np/get
 future_info_dict = {}  # 期货资讯行情
 # "交易方向", "交易价", "止损价", "止盈价", "交易前总额", "交易后总额", "利润"
