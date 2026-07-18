@@ -6,6 +6,7 @@ __pycache__/
 .idea/
 venv/
 test.py
+zxc.py
 QR.png
 *.json
 *.pkl

@@ -30,18 +30,19 @@ def is_in_restrict_time() -> bool:
 
 def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.np/get"):
     target_code = shared_data.ts_code.strip() if ts_code is None else ts_code
-    no_print = True
+    # no_print = True
     while True:
         cur_time = datetime.now().strftime("%H:%M:%S")
         if is_in_restrict_time():
-            print(f"\r未到开市时间[日盘>9:00，夜盘>21:00]，请等待！  当前时间：{cur_time}", end="", flush=True)
+            print(f"\r[ {cur_time} ] - [日市开盘： 上午9:00  夜市开盘： 21:00]，休市中······", end="", flush=True)
             # if no_print:
             #     print(f"\r未到开市时间，暂不能获取期货品种的开盘信息，请等待！  当前时间：{cur_time}", end="", flush=True)
             #     no_print = False
             sleep(1)
             continue
         else:
-            # print_context.print_context(f"开始获取期货品种[{target_code}]的今日开盘信息")
+            print("")
+            print_context.print_context(f"开始获取期货品种[{target_code}]的今日开盘信息")
             break
     # ==================== 配置区 ====================
     EXCHANGE_CODE = {
@@ -195,7 +196,7 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
         }
         today_file = os.path.join(cache_folder, f"{target_code}_{today_str}_openprice.json")
         with open(today_file, "w", encoding="utf-8") as fp:
-            json.dump(result_data[ts_code], fp, ensure_ascii=False, indent=4)
+            json.dump(result_data[target_code], fp, ensure_ascii=False, indent=4)
         # print(f"✅ 已使用手动输入开盘价：{float(open_price_input)}")
 
     shared_data.open_price = result_data

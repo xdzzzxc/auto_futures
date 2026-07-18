@@ -46,8 +46,8 @@ def monitor_profit_loss():
             send_msg(f"平仓失败错误：{str(e)}")
             print_context(f"平仓失败：{str(e)}")
 
-    """监视动态价格变化，完成自动平仓"""
-    print_context(f'程序正处于交易动态监控中，包括对自动下单和手动下单的交易监控都有自动平仓功能，请谨慎操作！')
+    # """监视动态价格变化，完成自动平仓"""
+    # print_context(f'程序正处于交易动态监控中，包括对自动下单和手动下单的交易监控都有自动平仓功能，请谨慎操作！')
     # if shared_data.order_param_dict:
     #     logger.info(f"[{shared_data.ts_code}]下单参数：\n{shared_data.order_param_dict}")
     #
@@ -78,7 +78,7 @@ def monitor_profit_loss():
             profit_price = shared_data.trade_menu_dict.get("止盈价", 0.0)
             loss_price = shared_data.trade_menu_dict.get("止损价", 0.0)
             ts_code = shared_data.trade_menu_dict.get("产品代码", shared_data.ts_code)
-
+            # print(f"\r监控程序检测到已设置期货品种[{ts_code}]的止盈值是：{pre_profit} 止损值是：{pre_loss}", flush=True, end="")
         # ============== 加锁读取 盈亏 + 当前价格 ==============
         profit = 0
         current_price = 0.0
@@ -107,6 +107,8 @@ def monitor_profit_loss():
         if all((profit >= pre_profit, pre_profit>0)):  # pre_profit>0表示已手动设置固定止盈值
             close_reason = f"[{ts_code}]止盈平仓\n盈利：{profit}元(手动设置固定预盈利值)"
             _trade(msg=close_reason)  # 模拟点击平仓控件按钮完成平仓操作
+            shared_data.threading_monitor_profit_loss = False
+            print("量化程序已完成自动平仓，暂时关闭自动监控程序！")
             break
         # 买多止盈：当前价 >= 止盈价
         elif direction == "Rise" and current_price >= profit_price:

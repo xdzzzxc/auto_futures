@@ -13,7 +13,7 @@ user_name = {0: "模拟交易-1811889418", 1: "国泰君安_CTP85415809"}  # 模
 trade_window = None  # 同花顺交易平台桌面对象
 current_price_dict = {}  # 即时行情中的期货商品买卖价格
 cur_price_deque = deque(maxlen=20000)
-read_price_mode = True  # 读取期货品种的当日价格模式：默认是deque数据-True;db数据库数据-False;
+read_mode = True  # 读取期货品种的当日价格模式：默认是deque数据-True;db数据库数据-False;
 deque_lock = threading.Lock()
 interval = 5  # 从同花顺窗口读取即时价格的时间间隔，默认为5秒
 login_control = {}  # 登录期货通交易软件
@@ -40,19 +40,14 @@ future_info_dict = {}  # 期货资讯行情
 trade_menu_dict = {}  # 成交后的交易参数,在trade.py模块中产生
 ts_code_attribute_dict = {}  # 交易品种的基本属性
 BIN_NUM = 8  # 配置参数：箱体数量，日内短线推荐8个等宽箱体
-# min_price_change = 0.00  # 最小跳点数
-# commission = 0.0  # 期货商品的每一手的手续费
-# leverage = 0.0  # 盈利杠杆,用来计算实时盈亏：差价 * 杠杆比例
-# margin = 0.0  # 期货商品保证金(与即时价位有关）
 
 total_balance = 0.0  # 账户总金额
 available_balance = 0.0  # 账户可用资金
 quote_list = ["m2609", "c2609", "jd2609"]  # 默认要从东方财富网获取开盘价等信息的期货品种
 
-trade_time_table = [(9, 0, 10, 15), (10, 30, 11, 30), (13, 30, 15, 0), (21, 0, 23, 0), (0, 0, 1, 30)]  # 交易时间表, 最后一个用测试。
-# tradeoff = False  # 只是检测是不是在交易时间段
+trade_time_table = [(9, 0, 10, 15), (10, 30, 11, 30), (13, 30, 15, 0), (21, 0, 23, 0)]  # 交易时间表, 最后一个用测试。
 start_trade_date = None  # 期货开始交易时间（下单日期）
-
+threading_monitor_profit_loss = False
 
 # ===================== 核心函数 =====================
 def is_trade_statue() -> bool:
@@ -115,7 +110,6 @@ def is_around(checked_value, target_value, error_range=5):  # 检测坐标位置
 
 
 def click_position(rect_tuple):
-
     x = rect_tuple[0] + (rect_tuple[2] - rect_tuple[0])//2
     y = rect_tuple[1] + (rect_tuple[3] - rect_tuple[1])//2
     return mouse.click(button='left', coords=(x, y))
@@ -147,6 +141,7 @@ def simulate_input(window, ctrl, value):
     except Exception as e:
         return False
     return True
+
 
 def get_data_cache_dir(marker=None):
     from pathlib import Path

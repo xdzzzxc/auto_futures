@@ -2,8 +2,6 @@ from time import sleep
 from datetime import datetime
 from public import shared_data
 from public.print_context import print_context
-import random
-from pywinauto.timings import wait_until
 from public.shared_data import ths_lock
 from data.db_price import write_price
 
@@ -37,6 +35,7 @@ def get_current_price(ts_code=None):
                 is_printed = True
             sleep(0.5)
             continue
+
         # 交易时间
         is_printed = False
         date_inner = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -49,29 +48,31 @@ def get_current_price(ts_code=None):
 
             # 价格为空直接跳过
             if not price_text:
-                sleep(1)
+                sleep(0.2)  # 防止读到空数据时循环疯狂扫UI
                 continue
             write_price([date_inner, price_text, ts_code])  # 将数据写入品种数据库
             # 存入队列（安全写法）
-            with shared_data.deque_lock:
-                shared_data.cur_price_deque.append((date_inner, price_text))
+            # with shared_data.deque_lock:
+            #     shared_data.cur_price_deque.append((date_inner, price_text))
+
         except Exception as e:  # noqa
             # 读取失败不崩溃，跳过即可
             # print_context(f"价格读取异常：{str(e)}")
             sleep(1)
             continue
         # ====================== 【安全打印最近10条价格】 ======================
-        try:
-            with shared_data.dict_lock:
-                dq_list = list(shared_data.cur_price_deque)
-                latest_10 = []
-                for item in dq_list[-10:]:
-                    try:
-                        latest_10.append(float(item[1].strip()))
-                    except:
-                        continue
-        except:
-            pass
+        # try:
+        #     with shared_data.dict_lock:
+        #         dq_list = list(shared_data.cur_price_deque)
+        #         latest_10 = []
+        #         for item in dq_list[-10:]:
+        #             try:
+        #                 latest_10.append(float(item[1].strip()))
+        #                 print(f"\r期货品种[{ts_code}]最近1分钟市场价格：\n{latest_10}", flush=True, end="")
+        #             except Exception as e:
+        #                 continue
+        # except:
+        #     pass
 
         sleep(shared_data.interval)  # 获取即时品种市场价格的时间间隔设置
 

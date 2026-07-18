@@ -6,6 +6,7 @@ from functools import wraps  # ← 新增：装饰器用
 from public import print_context
 from public.jiaoyisuo import get_future_info
 from datetime import datetime, timedelta
+from public.shared_data import get_data_cache_dir
 import threading  # ← 新增：全局锁用
 
 TABLE_MAX_ROWS = 100000
@@ -34,8 +35,9 @@ def _retry_on_lock(max_retries=5, delay=0.3):
 # ====================== 新增结束 ======================
 
 # 目录初始化
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-db_folder = os.path.join(BASE_DIR, r"futures_data\db")
+BASE_DIR = get_data_cache_dir()
+print(f"BASE_DIR: {BASE_DIR}")
+db_folder = os.path.join(BASE_DIR, "db")
 os.makedirs(db_folder, exist_ok=True)
 
 def get_short_code(full_ts_code: str) -> str:
@@ -63,12 +65,13 @@ def init_table(db_path: str):
         conn.execute(create_sql)
 
 def trim_old_data(db_path: str):
-    with _db_lock:  # ← 新增：加锁
-        with sqlite3.connect(db_path, timeout=10) as conn:  # ← 修改：加超时
+    with _db_lock:
+        with sqlite3.connect(db_path, timeout=10) as conn:
             cur = conn.cursor()
             cur.execute("SELECT COUNT(*) FROM price_data")
             total = cur.fetchone()[0]
-            if total > TABLE_MAX_ROWS:
+            # 增加缓冲区间，不要一超限就删，减少频繁删除
+            if total > TABLE_MAX_ROWS + 5000:
                 del_num = total - TABLE_MAX_ROWS
                 del_sql = """
                 DELETE FROM price_data
@@ -77,6 +80,7 @@ def trim_old_data(db_path: str):
                 )
                 """
                 cur.execute(del_sql, (del_num,))
+                conn.commit()
 
 def write_price(price_list):
     # 1. 基础长度校验
@@ -127,8 +131,9 @@ def read_db(full_ts_code, start_time=None, end_time=None, counts=None, ascending
     """
     # 拼接库路径
     short_code = full_ts_code[:-4]
-    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), r"futures_data\db", f"{short_code}.db")
-
+    # db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), r"futures_data\db", f"{short_code}.db")
+    db_path = get_db_path(full_ts_code)
+    # print(f"db_path: {db_path}")
     if not os.path.exists(db_path):
         print_context.print_context(f"No filepath:{db_path}")
         return None
@@ -167,9 +172,9 @@ def read_db(full_ts_code, start_time=None, end_time=None, counts=None, ascending
     sql = f"{base_sql} {order}"
 
     try:
-        with _db_lock:  # ← 新增：加锁
-            with sqlite3.connect(db_path, timeout=10) as conn:  # ← 修改：加超时
-                df = pd.read_sql(sql, conn, params=params)
+        # with _db_lock:  # ← 新增：加锁 这里读取数据可以不用加锁
+        with sqlite3.connect(db_path, timeout=10) as conn:  # ← 修改：加超时
+            df = pd.read_sql(sql, conn, params=params)
 
         # 字符串时间转为标准时间格式，新增一列便于分析
         df["dt"] = pd.to_datetime(df["record_time"], format="%Y%m%d%H%M%S")
@@ -204,7 +209,7 @@ def manual_start_wal(db_folder_path:str = db_folder):
 
 if __name__ == '__main__':
     # 测试用例，正常插入
-    price_list = ["20260613000237", 4525, "m2607"]
-    write_price(price_list)
-    df1 = read_db(full_ts_code="m2607", start_time="20260613000200", end_time=None, counts=2, ascending=False)
+    # price_list = ["20260711000238", 4525, "m2607"]
+    # write_price(price_list)
+    df1 = read_db(full_ts_code="m2607", start_time=None, end_time=None, counts=20, ascending=False)
     print(df1)

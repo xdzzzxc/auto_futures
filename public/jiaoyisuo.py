@@ -50,7 +50,7 @@ futures_info = {
     'm': {'exchange': '大商所', 'name': '豆粕', 'ext': 'DCE', 'margin': 0.07, 'leverage': 14.29, 'commission': 7.5, 'night_trading': True, 'min_price_change': 1, 'one_tick_profit': 10},
     'y': {'exchange': '大商所', 'name': '豆油', 'ext': 'DCE', 'margin': 0.08, 'leverage': 12.5, 'commission': 2.5, 'night_trading': True, 'min_price_change': 2, 'one_tick_profit': 10},
     'p': {'exchange': '大商所', 'name': '棕榈油', 'ext': 'DCE', 'margin': 0.08, 'leverage': 12.5, 'commission': 2.5, 'night_trading': True, 'min_price_change': 2, 'one_tick_profit': 10},
-    'c': {'exchange': '大商所', 'name': '玉米', 'ext': 'DCE', 'margin': 0.05, 'leverage': 20.0, 'commission': 1.2, 'night_trading': False, 'min_price_change': 1, 'one_tick_profit': 10},
+    'c': {'exchange': '大商所', 'name': '玉米', 'ext': 'DCE', 'margin': 6, 'leverage': 20.0, 'commission': 1.2, 'night_trading': True, 'min_price_change': 1, 'one_tick_profit': 10},
     'i': {'exchange': '大商所', 'name': '铁矿石', 'ext': 'DCE', 'margin': 0.12, 'leverage': 8.33, 'commission_rate': 0.0001, 'night_trading': True, 'min_price_change': 0.5, 'one_tick_profit': 50},
     'j': {'exchange': '大商所', 'name': '焦炭', 'ext': 'DCE', 'margin': 0.20, 'leverage': 5.0, 'commission_rate': 0.0001, 'night_trading': True, 'min_price_change': 0.5, 'one_tick_profit': 50},
     'jm': {'exchange': '大商所', 'name': '焦煤', 'ext': 'DCE', 'margin': 0.15, 'leverage': 6.67, 'commission_rate': 0.0001, 'night_trading': True, 'min_price_change': 0.5, 'one_tick_profit': 30},
@@ -118,7 +118,7 @@ FUTURES_NO_NIGHT = {
     "ss",  # 不锈钢
     "ec",  # 集运指数
     "bc",  # 铜 BC
-    "c"
+
 }
 # 数据说明：
 # 元组结构：(交易所, 品种名称, 代码, 保证金(元), 每波动价值(元), 最新手续费(元), 是否有夜盘(True/False))
@@ -170,4 +170,4 @@ def get_future_info(symbol: str) -> Dict[str, Any] | None:
 
 
 if __name__ == "__main__":
-    print(get_future_info("jd2609"))
+    print(get_future_info("c2609"))

@@ -12,21 +12,33 @@ from log.trade_log import setup_trade_loggers
 from data.get_quote import get_open_price
 from data.data_from_sina import fetch_future_data
 from data.db_price import read_db
+from public.shared_data import get_data_cache_dir
 logger = setup_trade_loggers()
 pd.set_option("display.max_rows", None)
 
 # 分箱分析当日交易价格
-def bin_analyzer(ts_code=None, bin_num=None):
+def bin_analyzer(ts_code=None, bin_num=None, read_mode=None):
+    read_mode = read_mode if read_mode is not None else shared_data.read_mode
     ts_code = ts_code if ts_code is not None else shared_data.ts_code
     bin_num = bin_num if bin_num is not None else shared_data.BIN_NUM
     # 获取期货品种ts_code的今日开盘价等信息
     open_info = get_open_price(ts_code)
-    print(open_info)
+    print(f'open_info:{open_info}')
     open_price = open_info[ts_code]['open']
-    print(f'[{ts_code}]开盘价：{open_price}')
-    df = read_db(full_ts_code=ts_code, counts=1000, start_time="20260615090000", end_time="20260615113000")
+    # print(f'[{ts_code}]开盘价：{open_price}')
+    if not read_mode:
+        df = read_db(full_ts_code=ts_code)
+    else:
+        df = shared_data.cur_price_deque
+        
 
-    # print(df)
+
+
+
+    if df is None or df.empty:
+        print_context("数据库查询无数据或读取失败，终止分箱分析")
+        return
+    print(f"df:{df}")
     df["bin"], bin_edges = pd.cut(
         df["price"],
         bins=bin_num,

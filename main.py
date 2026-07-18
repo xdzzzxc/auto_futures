@@ -18,7 +18,7 @@ from core.monitor import monitor_profit_loss
 from data.get_quote import get_open_price
 from public.anti_screensaver import anti_screensaver_thread
 from data.reget_open_price import reget_open_price
-
+from main_monitor.run_monitor import run_monitor
 
 def get_direction(title="交易方向", msg=None) -> str | None:
     default_dir = shared_data.direction
@@ -262,13 +262,15 @@ def select_future():
             shared_data.direction = input_value
             break
 
+
+
 def set_stop_loss():
     win = tk.Tk()
     win.title("设置止盈止损")
     win.geometry("260x130")
     win.resizable(False, False)
 
-    # 默认值0
+    # 标签+输入框
     tk.Label(win, text="止盈值：").place(x=30, y=20)
     e1 = tk.Entry(win, width=15)
     e1.insert(0, "0")
@@ -285,16 +287,42 @@ def set_stop_loss():
             shared_data.pre_loss = -abs(float(e2.get()))
             win.destroy()
             print(f"已手动设置期货品种[{shared_data.ts_code}]的止盈值：{shared_data.pre_profit}元 ； 止损值：{shared_data.pre_loss}元。")
-        except Exception as e:  # noqa
+        except Exception:
             messagebox.showerror("错误", "请输入有效数字")
 
     def cancel():
         win.destroy()
         print("请勿按取消按钮，否则程序将关闭应用等待重启！")
 
-    tk.Button(win, text="确定", width=7, command=confirm).place(x=50, y=85)
+    # 回车确认统一入口
+    def enter_submit(event):
+        confirm()
+
+    # 止盈输入框回车切换到止损框
+    def e1_switch_e2(event):
+        e2.focus_set()
+        e2.select_range(0, tk.END)
+
+    # 按钮
+    btn_ok = tk.Button(win, text="确定", width=7, command=confirm)
+    btn_ok.place(x=50, y=85)
     tk.Button(win, text="取消", width=7, command=cancel).place(x=130, y=85)
+
+    # ========== 绑定事件 ==========
+    # 止盈框回车切止损
+    e1.bind("<Return>", e1_switch_e2)
+    # 止损框回车提交
+    e2.bind("<Return>", enter_submit)
+    # 全局窗口回车触发确定
+    win.bind("<Return>", enter_submit)
+
+    # ========== 窗口打开立刻聚焦第一个输入框，文字全选 ==========
+    win.focus_force()
+    e1.focus_set()
+    e1.select_range(0, tk.END)
+
     win.mainloop()
+
 
 def _init_shared_data(user_type, target_days, lot_size=1, interval=5):
     print_context("程序正在校验日期、时间 ······")
@@ -313,12 +341,12 @@ def _init_shared_data(user_type, target_days, lot_size=1, interval=5):
     # 加入新浪历史交易数据
     analysis_data, fut_data = fetch_future_data(ts_code=shared_data.ts_code)
     shared_data.history_data_analysis = analysis_data
-    check_ths_status()
+    check_ths_status()  # 开始启动同花顺期货通软件
 
 
 if __name__ == "__main__":
     _init_shared_data(
-        user_type=1,  # 0虚拟用户，1国泰君安期货用户
+        user_type=0,  # 0虚拟用户，1国泰君安期货用户
         target_days=5,  # 期货品种历史交易日数据，从前一个交易日往前推
         lot_size=1,  # 交易手数，不同期货品种有不同的最低交易手数
         interval=5  # 每5秒获取一次品种价格
@@ -326,7 +354,7 @@ if __name__ == "__main__":
     # ========== 启动核心线程（daemon=True 安全退出）==========
     price_thread = threading.Thread(target=get_current_price, name="PriceThread", daemon=True)
     order_thread = threading.Thread(target=order, name="OrderThread", daemon=True)
-    monitor_thread = threading.Thread(target=monitor_profit_loss, name="MonitorThread", daemon=True)
+    monitor_thread = threading.Thread(target=run_monitor, name="MonitorThread", daemon=True)
     reget_open_price_thread = threading.Thread(target=reget_open_price, name="ReGetOpenPriceThread", daemon=True)
     price_thread.start()
     order_thread.start()
@@ -335,7 +363,9 @@ if __name__ == "__main__":
                   f"\n订单线程-trade.order(OrderThread)\n自动交易监控线程-monitor.monitor(MonitorThread)")
     sleep(5)
     reget_open_price_thread.start()
-    anti_screensaver_thread()
+    anti_thread = threading.Thread(target=anti_screensaver_thread, daemon=True)
+    anti_thread.start()
+    # anti_screensaver_thread()
     try:
         while True:
             sleep(1)
