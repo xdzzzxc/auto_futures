@@ -346,7 +346,7 @@ def _init_shared_data(user_type, target_days, lot_size=1, interval=5):
 
 if __name__ == "__main__":
     _init_shared_data(
-        user_type=0,  # 0虚拟用户，1国泰君安期货用户
+        user_type=1,  # 0虚拟用户，1国泰君安期货用户
         target_days=5,  # 期货品种历史交易日数据，从前一个交易日往前推
         lot_size=1,  # 交易手数，不同期货品种有不同的最低交易手数
         interval=5  # 每5秒获取一次品种价格

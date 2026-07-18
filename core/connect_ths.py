@@ -305,9 +305,8 @@ def local_control():
                         ctrl_mapping['即时价格'] = [ctrl, rect_tuple, win_txt]
             except Exception:
                 continue
-        missing_ctrls = [k for k, v in ctrl_mapping.items() if v is None]
-        none_count = len(missing_ctrls)
 
+        none_count = sum(1 for v in ctrl_mapping.values() if v is None)
         if none_count == 0:
             print(f"\r >>>>>>>>>>>> 已准确定位到全部所需控件[{local_control_count}] <<<<<<<<<<<<")
             # 需求3：打印全部控件key列表
@@ -318,9 +317,10 @@ def local_control():
             print(f"\r正在定位应用所需的控件：{local_control_count - none_count} - {[k for k, v in ctrl_mapping.items() if v is not None]}", flush=True, end="")
         try_count += 1
         sleep(0.1)
-
+    missing_ctrls = [k for k, v in ctrl_mapping.items() if v is None]
+    none_count = len(missing_ctrls)
     if none_count > 0:
-        print(f"未定位到所需全部控件，程序不能继续运行即将自动退出：\n缺失控件列表[共缺失{none_count}个]:{missing_ctrls}")
+        print(f"未定位到所需全部控件，程序不能继续运行即将自动退出：\n>>> 缺失控件列表[共缺失{none_count}个]:{missing_ctrls}")
         exit(0)
     shared_data.ths_common_control = ctrl_mapping
     # 在期货代码框输入交易品种代码并锁定
