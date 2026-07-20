@@ -7,7 +7,7 @@ from public.jiaoyisuo import get_future_info
 from public import shared_data
 from public.print_context import print_context
 from sendmsg.weichat_push import send_msg
-from public.shared_data import click_position, is_trade_statue
+from public.shared_data import click_position, is_trade_status
 from log.trade_log import setup_trade_loggers
 from data.get_quote import get_open_price
 from data.data_from_sina import fetch_future_data
@@ -102,10 +102,10 @@ def order(ts_code=None):
 
         current_time = datetime.now()
         h, m = current_time.hour, current_time.minute
-        if is_night and h == 21 and m < 30 and not is_trade_statue():
+        if is_night and h == 21 and m < 30 and not is_trade_status():
             opening_session_trade()
             break
-        elif not is_night and h == 9 and m < 30 and not is_trade_statue():
+        elif not is_night and h == 9 and m < 30 and not is_trade_status():
             normal_session_trade()
             break
         # else:
@@ -169,13 +169,13 @@ def order(ts_code=None):
         condition_met = False
         target_profit = 0.0
         # 根据当前即时价格确定是否下单交易
-        if shared_data.direction == "Rise" and not is_trade_statue():
+        if shared_data.direction == "Rise" and not is_trade_status():
             target = open_price + history_data.get("最小高开差", 0)  # 设置买多时的最高价位
             if current_price <= target:
                 condition_met = True
                 target_profit = open_price + history_data.get("最大高开差", 0)
 
-        elif shared_data.direction == "Fall" and not is_trade_statue():
+        elif shared_data.direction == "Fall" and not is_trade_status():
             target = open_price - history_data.get("最小低开差", 0)  # 设置卖空时的最小价位
             if current_price >= target:
                 condition_met = True

@@ -16,7 +16,7 @@ from data.data_from_sina import fetch_future_data
 from public.sync_time import sync_time
 from core.monitor import monitor_profit_loss
 from data.get_quote import get_open_price
-from public.anti_screensaver import kill_unprotected_process
+from data.db_price import flush_remain_buffer
 from data.reget_open_price import reget_open_price
 from main_monitor.run_monitor import run_monitor
 
@@ -324,7 +324,7 @@ def set_stop_loss():
     win.mainloop()
 
 
-def _init_shared_data(user_type, target_days, lot_size=1, interval=5):
+def _init_shared_data(user_type, target_days, lot_size=1, get_price_interval=5):
     print_context("程序正在校验日期、时间 ······")
     sync_time()
     shared_data.user_type = user_type
@@ -334,22 +334,17 @@ def _init_shared_data(user_type, target_days, lot_size=1, interval=5):
     set_stop_loss()  # 设置期货品种的固定止损止盈值
     shared_data.target_days = target_days
     shared_data.lot_size = lot_size
-    shared_data.interval = interval  # 时间间隔
+    shared_data.interval = get_price_interval  # 获取即时行情价格的时间间隔
     prefix = re.match(r'[a-zA-Z]+', ts_code).group()
     shared_data.min_price_change = futures_info[prefix]['min_price_change']
     get_open_price()
-    # 加入新浪历史交易数据
-    analysis_data, fut_data = fetch_future_data(ts_code=shared_data.ts_code)
-    shared_data.history_data_analysis = analysis_data
-    check_ths_status()  # 开始启动同花顺期货通软件
-
-
-if __name__ == "__main__":
+        # 加入新浪历史交易数200  200
+    # if __name__ == "__main__":
     _init_shared_data(
         user_type=0,  # 0虚拟用户，1国泰君安期货用户
         target_days=5,  # 期货品种历史交易日数据，从前一个交易日往前推
         lot_size=1,  # 交易手数，不同期货品种有不同的最低交易手数
-        interval=5  # 每5秒获取一次品种价格
+        get_price_interval=5  # 每5秒获取一次品种价格
     )
     # ========== 启动核心线程（daemon=True 安全退出）==========
     price_thread = threading.Thread(target=get_current_price, name="PriceThread", daemon=True)
@@ -370,4 +365,5 @@ if __name__ == "__main__":
         while True:
             sleep(1)
     except KeyboardInterrupt:
+        flush_remain_buffer()
         print_context("\n🛑 程序已手动停止")

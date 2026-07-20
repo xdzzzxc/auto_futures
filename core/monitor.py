@@ -4,7 +4,7 @@ from public import shared_data
 from public.print_context import print_context
 from sendmsg.weichat_push import send_msg
 from public.jiaoyisuo import get_future_info
-from public.shared_data import click_position, is_trade_statue
+from public.shared_data import click_position, is_trade_status, trade_flag
 from log.trade_log import setup_trade_loggers
 logger = setup_trade_loggers()
 UI_DELAY_SHORT = 0.2
@@ -38,32 +38,29 @@ def monitor_profit_loss():
                 shared_data.trade_window.set_focus()
                 sleep(0.2)
                 click_position(close_ctrl_position)
-
+                sleep(2)  # 平仓后等待同花顺成交弹窗刷新，冷却操作！
             send_msg(f"自动平仓成功 - 品种：{ts_code}\n{msg}")
-            # break  # 如果是只有单交易退出监控线程，若有多各种交易如手动下单后则不会再次自动平仓
+            shared_data.trade_menu_dict.clear()
+            shared_data.order_param_dict.clear()
+            # shared_data.pre_profit = 0
+            # shared_data.pre_loss = 0
+            shared_data.threading_monitor_profit_loss = False
 
         except Exception as e:
             send_msg(f"平仓失败错误：{str(e)}")
             print_context(f"平仓失败：{str(e)}")
-
-    # """监视动态价格变化，完成自动平仓"""
-    # print_context(f'程序正处于交易动态监控中，包括对自动下单和手动下单的交易监控都有自动平仓功能，请谨慎操作！')
-    # if shared_data.order_param_dict:
-    #     logger.info(f"[{shared_data.ts_code}]下单参数：\n{shared_data.order_param_dict}")
-    #
-    # if shared_data.history_data_analysis:
-    #     logger.info(f"[{shared_data.ts_code}]新浪历史交易数据分析：\n{shared_data.history_data_analysis}")
-    # if shared_data.open_price:
-    #     logger.info(f"[{shared_data.ts_code}]今日开盘信息[东财网]:\n{shared_data.open_price}")
-    #
-    # if shared_data.trade_menu_dict:
-    #     logger.info(f"程序已自动下单，成交参数：{shared_data.trade_menu_dict}\n{'=^=' * 40}")
+            # 失败也关闭监控，避免无限重试；如需重试可自行加计数限制
+            shared_data.threading_monitor_profit_loss = False
 
     no_print = True  # 只打印一次防止刷屏
 
     while True:
+        # 0720临时增加,判断是不是在交易时段内，否则关闭自动平仓交易线程
+        if not trade_flag:
+            shared_data.threading_monitor_profit_loss = False
+            break
         # ============== 无持仓直接跳过 ==============
-        if not is_trade_statue():
+        if not is_trade_status():
             if no_print:
                 print(f">>> 无期货交易中，等待开仓！")
                 no_print = False
@@ -108,32 +105,43 @@ def monitor_profit_loss():
             close_reason = f"[{ts_code}]止盈平仓\n盈利：{profit}元(手动设置固定预盈利值)"
             _trade(msg=close_reason)  # 模拟点击平仓控件按钮完成平仓操作
             shared_data.threading_monitor_profit_loss = False
+            sleep(2)  # 2秒后再去检测监控状态
             print("量化程序已完成自动平仓，暂时关闭自动监控程序！")
             break
         # 买多止盈：当前价 >= 止盈价
         elif direction == "Rise" and current_price >= profit_price:
             close_reason = f"[{ts_code}]止盈平仓\n价格触发止盈价 {profit_price}\n盈利：{profit}"
             _trade(msg=close_reason)
+            shared_data.threading_monitor_profit_loss = False
+            sleep(2)  # 2秒后再去检测监控状态
             break
         # 卖空止盈：当前价 <= 止盈价
         elif direction == "Fall" and current_price <= profit_price:
             close_reason = f"[{ts_code}]止盈平仓\n价格触发止盈价 {profit_price}\n盈利：{profit}"
             _trade(close_reason)
+            shared_data.threading_monitor_profit_loss = False
+            sleep(2)  # 2秒后再去检测监控状态
             break
         # ---------------- 止损：亏损 <=-400  或  价格达到止损价 ----------------
         elif all((profit <= pre_loss, pre_loss < 0)):
             close_reason = f"[{ts_code}]止损平仓\n亏损：{profit}元(手动设置固定预亏损值)"
             _trade(msg=close_reason)
+            shared_data.threading_monitor_profit_loss = False
+            sleep(2)  # 2秒后再去检测监控状态
             break
         # 买多止损：当前价 <= 止损价
         elif direction == "Rise" and current_price <= loss_price:
             close_reason = f"[{ts_code}]止损平仓\n价格触发止损价 {loss_price}\n亏损：{profit}"
             _trade(msg=close_reason)
+            shared_data.threading_monitor_profit_loss = False
+            sleep(2)  # 2秒后再去检测监控状态
             break
         # 卖空止损：当前价 >= 止损价
         elif direction == "Fall" and current_price >= loss_price:
             close_reason = f"[{ts_code}]止损平仓\n价格触发止损价 {loss_price}\n亏损：{profit}"
             _trade(msg=close_reason)
+            shared_data.threading_monitor_profit_loss = False
+            sleep(2)  # 2秒后再去检测监控状态
             break
         sleep(0.5)  # 设置监控时间间隔为0.5秒
 

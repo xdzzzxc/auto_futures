@@ -95,10 +95,10 @@ def auto_login(ths_window):
     无内嵌login函数，所有登录操作平铺写在本函数内
     软件已启动时，直接调用此函数即可，无需重复启动exe
     """
-    global subwindow
+    # global subwindow
 
     # 定位期货户按钮
-    close_ad_windows()  # 关闭弹窗确保可以点击到期货户按钮
+
     user_type_btn = ths_window.child_window(control_type='Button', title_re='期货户|期货用户')
     shared_data.login_control.clear()
     shared_data.login_control['期货户'] = [
@@ -122,9 +122,13 @@ def auto_login(ths_window):
     exist_flag = False
     max_wait = 15
     wait_cnt = 0
+    desktop = Desktop(backend="uia")
+    subwindow = None
     while not exist_flag and wait_cnt < max_wait:
+        close_ad_windows()  # 每次循环都要清理一下广告弹窗
         try:
             subwindow = ths_window.child_window(title="同花顺期货通交易", control_type="Window")
+            # subwindow = desktop.window(title_re=r".*同花顺期货通交易.*", control_type="Window", timeout=1)
             if subwindow.exists(timeout=0):
                 exist_flag = True
                 break
@@ -207,6 +211,9 @@ def check_ths_status():
         app = Application(backend="uia").connect(process=happ_pid, timeout=5)
         # ths_window = app.window(title_re=r".*同花顺期货通.*", control_type="Window")
         ths_window = app.window(control_type="Window", visible_only=False)
+        close_ad_windows()  # 关闭弹窗确保启动顺利进行
+        ths_window.set_focus()
+        ths_window.maximize()
         qhh_btn = ths_window.child_window(control_type='Button', title_re='期货户|期货用户')
         qhh_btn_enabled = qhh_btn.is_enabled()
         if qhh_btn_enabled:
@@ -341,6 +348,9 @@ def local_control():
 
 
 def set_loss_profit(param: dict=None):
+    """
+    设置云止损止盈保本单
+    """
     if param is None:
         param = shared_data.order_param_dict.copy()  # 即时行情价分析结果
     app = None

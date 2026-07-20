@@ -1,4 +1,5 @@
 import os
+from public import shared_data
 import sqlite3
 import pandas as pd
 import time  # ← 新增：重试延时用
@@ -117,6 +118,66 @@ def write_price(price_list):
     except Exception as e:
         print_context.print_context(f"入库异常：{e}")
 
+def batch_write_price(batch_list):
+    """
+    批量入库，每条数据完整复用write_price的校验、分库、建表、清理、异常逻辑
+    同时优化：按db_path分组，同一个库一次性批量execute，减少重复连接开销
+    """
+    # 第一步：批量预校验 + 按库路径分组
+    db_group = {}  # key:db_path, value: 合法数据列表
+    for price_list in batch_list:
+        # ========== 完全复制你write_price的前置校验 ==========
+        if len(price_list) != 3:
+            print_context.print_context("参数长度错误")
+            continue
+
+        record_time, price, ts_code = price_list
+        record_time = str(record_time).strip()
+        ts_code = str(ts_code).strip()
+
+        if not record_time or not ts_code:
+            print_context.print_context("时间/合约码为空，跳过入库")
+            continue
+
+        try:
+            price_float = float(str(price).strip())
+        except (ValueError, TypeError):
+            print_context.print_context("价格格式错误，跳过入库")
+            continue
+        # ====================================================
+
+        # 合法数据，按库分组
+        db_path = get_db_path(ts_code)
+        if db_path not in db_group:
+            db_group[db_path] = []
+        db_group[db_path].append((record_time, price_float, ts_code))
+
+    # 分组批量写入每个独立数据库
+    for db_path, valid_rows in db_group.items():
+        if not valid_rows:
+            continue
+        try:
+            init_table(db_path)
+            insert_sql = "INSERT INTO price_data (record_time, price, ts_code) VALUES (?, ?, ?)"
+            # 沿用原有全局数据库锁，和其他读/写模块互斥
+            with _db_lock:
+                with sqlite3.connect(db_path, timeout=10) as conn:
+                    # 单库批量插入，一次事务
+                    conn.executemany(insert_sql, valid_rows)
+            # 清理过期数据（和原逻辑一致，每次入库后裁剪）
+            trim_old_data(db_path)
+        except sqlite3.IntegrityError:
+            print_context.print_context(f"数据库 {db_path} 存在重复主键记录，部分数据保存失败！")
+        except Exception as e:
+            print_context.print_context(f"批量入库异常 db:{db_path} err:{e}")
+
+def flush_remain_buffer():  # 非正常退出时将缓冲区残留数据写入数据库
+    """程序关闭前调用，落库剩余缓存行情"""
+    with shared_data.buffer_lock:
+        remain = shared_data.price_buffer.copy()
+        shared_data.price_buffer.clear()
+    if remain:
+        batch_write_price(remain)
 
 @_retry_on_lock()  # ← 新增：重试装饰器
 def read_db(full_ts_code, start_time=None, end_time=None, counts=None, ascending=False):

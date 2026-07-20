@@ -3,7 +3,7 @@ from time import sleep
 import random
 from collections import deque
 from datetime import datetime
-
+import time
 import pyperclip
 from pywinauto import mouse
 from chinese_calendar import is_holiday  # 纯本地节假日库，一次安装永久用
@@ -11,11 +11,22 @@ from chinese_calendar import is_holiday  # 纯本地节假日库，一次安装�
 user_type = 0  # 0-模拟用户  1-国泰君安期货用户
 user_name = {0: "模拟交易-1811889418", 1: "国泰君安_CTP85415809"}  # 模拟交易-1811889418 国泰君安_CTP85415809
 trade_window = None  # 同花顺交易平台桌面对象
+
+# 期货品种即时行情价格缓冲区及相关安全配置
+get_price_interval = 5  # 从同花顺窗口读取即时价格的时间间隔，默认为5秒
 current_price_dict = {}  # 即时行情中的期货商品买卖价格
 cur_price_deque = deque(maxlen=20000)
+price_buffer = []  # 缓冲区
+buffer_lock = threading.Lock()  # 缓冲锁
+last_flush_ts = time.time()  # 上次写入的时间戳
+analyze_interval = 60  # 读取数据库数据的频率
+analyze_interval_lock = threading.Lock()  # 加锁
+FLUSH_INTERVAL = analyze_interval - 5  # 批量写入数据的时间间隔，小于读取数据频率
+MAX_BUFFER_COUNT = FLUSH_INTERVAL // get_price_interval  # 缓冲区最多存200条数据，否则强制入库
 read_mode = True  # 读取期货品种的当日价格模式：默认是deque数据-True;db数据库数据-False;
 deque_lock = threading.Lock()
-interval = 5  # 从同花顺窗口读取即时价格的时间间隔，默认为5秒
+
+# __________________________________________________
 login_control = {}  # 登录期货通交易软件
 ths_common_control = {}  # 交易平台常用控件字典,此处为多进程管理模式，以便进程数据共享
 condition_control = {}  # 条件单窗口控件映射字典
@@ -47,10 +58,10 @@ quote_list = ["m2609", "c2609", "jd2609"]  # 默认要从东方财富网获取�
 
 trade_time_table = [(9, 0, 10, 15), (10, 30, 11, 30), (13, 30, 15, 0), (21, 0, 23, 0)]  # 交易时间表, 最后一个用测试。
 start_trade_date = None  # 期货开始交易时间（下单日期）
-threading_monitor_profit_loss = False
+threading_monitor_profit_loss = False  # 设置自动止损止盈开关
 
 # ===================== 核心函数 =====================
-def is_trade_statue() -> bool:
+def is_trade_status() -> bool:
     """
     判断是否持仓或是否在交易状态中：权益 != 可用资金 → 有持仓、交易中、返回True
     返回：True=有持仓 / False=无持仓
