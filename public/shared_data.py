@@ -7,6 +7,10 @@ import time
 import pyperclip
 from pywinauto import mouse
 from chinese_calendar import is_holiday  # 纯本地节假日库，一次安装永久用
+import subprocess
+import os
+
+from tushare import shibor_data
 
 user_type = 0  # 0-模拟用户  1-国泰君安期货用户
 user_name = {0: "模拟交易-1811889418", 1: "国泰君安_CTP85415809"}  # 模拟交易-1811889418 国泰君安_CTP85415809
@@ -25,6 +29,8 @@ FLUSH_INTERVAL = analyze_interval - 5  # 批量写入数据的时间间隔，小
 MAX_BUFFER_COUNT = FLUSH_INTERVAL // get_price_interval  # 缓冲区最多存200条数据，否则强制入库
 read_mode = True  # 读取期货品种的当日价格模式：默认是deque数据-True;db数据库数据-False;
 deque_lock = threading.Lock()
+# 鼠标锁：平仓点击鼠标、防屏保壁纸程序使用鼠标
+mouse_lock = threading.Lock()
 
 # __________________________________________________
 login_control = {}  # 登录期货通交易软件
@@ -121,9 +127,10 @@ def is_around(checked_value, target_value, error_range=5):  # 检测坐标位置
 
 
 def click_position(rect_tuple):
-    x = rect_tuple[0] + (rect_tuple[2] - rect_tuple[0])//2
-    y = rect_tuple[1] + (rect_tuple[3] - rect_tuple[1])//2
-    return mouse.click(button='left', coords=(x, y))
+    with mouse_lock:
+        x = rect_tuple[0] + (rect_tuple[2] - rect_tuple[0])//2
+        y = rect_tuple[1] + (rect_tuple[3] - rect_tuple[1])//2
+        return mouse.click(button='left', coords=(x, y))
 
 def simulate_input(window, ctrl, value):
 
@@ -170,8 +177,30 @@ def get_data_cache_dir(marker=None):
     cache_folder.mkdir(parents=True, exist_ok=True)
     return str(cache_folder)
 
+# 统一弹窗的写法,目前暂未复用,如有必要请在main.py模块中参照修改
+def get_direction(title="交易方向", msg=None) -> str | None:
+    import tkinter as tk
+    default_dir = direction
+    if msg is None:
+        msg = (f"金投网推荐[{ts_code}]: {'暂无推荐' if not direction else direction}"
+               f"\n要变更交易方向，请手动选择！")
+    options = ["Rise", "Fall", "Sideways", "Cautious", "Ease"]
+
+    # 不新建Tk，创建弹窗依附主窗口
+    root = tk.Toplevel()
+    root.title(title)
+    root.attributes('-topmost', True)
+    root.lift()
+    root.resizable(False, False)
+    root.attributes('-toolwindow', True)
+    # 其余逻辑不变...
+    root.wait_window() # 替换mainloop，阻塞等待弹窗关闭
+
+
+
+
 
 if __name__ == "__main__":
     # print_context(f"今天是：{datetime.now().strftime('%Y/%m/%d %H:%M:%S')},期货交易：{is_trade_period}")
     # print(default_futures)
-    pass
+    get_direction()

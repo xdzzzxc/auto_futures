@@ -168,6 +168,9 @@ def fetch_future_data(ts_code=None):
 
     return result, fut_data
 
+def judge_trend():
+    pass
+
 
 if __name__ == "__main__":
     # 本地测试：模拟盘中切换合约

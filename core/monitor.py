@@ -1,6 +1,7 @@
 from time import sleep
 from datetime import datetime
 from public import shared_data
+from public.anti_screensaver import kill_blacklist_process
 from public.print_context import print_context
 from sendmsg.weichat_push import send_msg
 from public.jiaoyisuo import get_future_info
@@ -30,9 +31,10 @@ def auto_trade():
 
 
 def monitor_profit_loss():
-    # ============== 执行平仓 ==============
+    # ============== 自动止损止盈执行平仓 ==============
     def _trade(msg):
         try:
+            kill_blacklist_process()  # 点击平仓控件前杀死屏保、壁纸等程序以免遮挡而无效点击
             with shared_data.ths_lock:
                 shared_data.trade_window.maximize()
                 shared_data.trade_window.set_focus()
@@ -56,7 +58,7 @@ def monitor_profit_loss():
 
     while True:
         # 0720临时增加,判断是不是在交易时段内，否则关闭自动平仓交易线程
-        if not trade_flag:
+        if not trade_flag():
             shared_data.threading_monitor_profit_loss = False
             break
         # ============== 无持仓直接跳过 ==============
@@ -109,35 +111,35 @@ def monitor_profit_loss():
             print("量化程序已完成自动平仓，暂时关闭自动监控程序！")
             break
         # 买多止盈：当前价 >= 止盈价
-        elif direction == "Rise" and current_price >= profit_price:
+        if direction == "Rise" and current_price >= profit_price:
             close_reason = f"[{ts_code}]止盈平仓\n价格触发止盈价 {profit_price}\n盈利：{profit}"
             _trade(msg=close_reason)
             shared_data.threading_monitor_profit_loss = False
             sleep(2)  # 2秒后再去检测监控状态
             break
         # 卖空止盈：当前价 <= 止盈价
-        elif direction == "Fall" and current_price <= profit_price:
+        if direction == "Fall" and current_price <= profit_price:
             close_reason = f"[{ts_code}]止盈平仓\n价格触发止盈价 {profit_price}\n盈利：{profit}"
             _trade(close_reason)
             shared_data.threading_monitor_profit_loss = False
             sleep(2)  # 2秒后再去检测监控状态
             break
         # ---------------- 止损：亏损 <=-400  或  价格达到止损价 ----------------
-        elif all((profit <= pre_loss, pre_loss < 0)):
+        if all((profit <= pre_loss, pre_loss < 0)):
             close_reason = f"[{ts_code}]止损平仓\n亏损：{profit}元(手动设置固定预亏损值)"
             _trade(msg=close_reason)
             shared_data.threading_monitor_profit_loss = False
             sleep(2)  # 2秒后再去检测监控状态
             break
         # 买多止损：当前价 <= 止损价
-        elif direction == "Rise" and current_price <= loss_price:
+        if direction == "Rise" and current_price <= loss_price:
             close_reason = f"[{ts_code}]止损平仓\n价格触发止损价 {loss_price}\n亏损：{profit}"
             _trade(msg=close_reason)
             shared_data.threading_monitor_profit_loss = False
             sleep(2)  # 2秒后再去检测监控状态
             break
         # 卖空止损：当前价 >= 止损价
-        elif direction == "Fall" and current_price >= loss_price:
+        if direction == "Fall" and current_price >= loss_price:
             close_reason = f"[{ts_code}]止损平仓\n价格触发止损价 {loss_price}\n亏损：{profit}"
             _trade(msg=close_reason)
             shared_data.threading_monitor_profit_loss = False

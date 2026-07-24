@@ -19,6 +19,7 @@ from data.get_quote import get_open_price
 from data.db_price import flush_remain_buffer
 from data.reget_open_price import reget_open_price
 from main_monitor.run_monitor import run_monitor
+from public.anti_screensaver import main_daemon
 
 def get_direction(title="交易方向", msg=None) -> str | None:
     default_dir = shared_data.direction
@@ -338,10 +339,13 @@ def _init_shared_data(user_type, target_days, lot_size=1, get_price_interval=5):
     prefix = re.match(r'[a-zA-Z]+', ts_code).group()
     shared_data.min_price_change = futures_info[prefix]['min_price_change']
     get_open_price()
-        # 加入新浪历史交易数200  200
-    # if __name__ == "__main__":
+    fetch_future_data()
+    print(f"[{shared_data.ts_code}]历史交易数据：{shared_data.history_data_analysis}")
+    check_ths_status()  # 检查同花顺期货通启动状态
+
+if __name__ == "__main__":
     _init_shared_data(
-        user_type=0,  # 0虚拟用户，1国泰君安期货用户
+        user_type=0,  # 0-虚拟用户，1-国泰君安期货用户
         target_days=5,  # 期货品种历史交易日数据，从前一个交易日往前推
         lot_size=1,  # 交易手数，不同期货品种有不同的最低交易手数
         get_price_interval=5  # 每5秒获取一次品种价格
@@ -358,9 +362,9 @@ def _init_shared_data(user_type, target_days, lot_size=1, get_price_interval=5):
                   f"\n订单线程-trade.order(OrderThread)\n自动交易监控线程-monitor.monitor(MonitorThread)")
     sleep(5)
     reget_open_price_thread.start()
-    # anti_thread = threading.Thread(target=kill_unprotected_process, daemon=True)  # 屏保程序可以在需要的时候单独运行
-    # anti_thread.start()
-    # anti_screensaver_thread()
+    anti_thread = threading.Thread(target=main_daemon, daemon=True)  # 屏保程序可以在需要的时候单独运行
+    anti_thread.start()
+
     try:
         while True:
             sleep(1)

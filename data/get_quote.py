@@ -169,17 +169,17 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
         root = tk.Tk()
         root.withdraw()
         root.attributes('-topmost', True)  # 窗口总是置顶
-        open_price_input = simpledialog.askfloat(f"{url}", f"期货品种: {target_code}")
+        open_price_input = simpledialog.askfloat(f"{url}", f"请输入期货品种开盘价: {target_code}")
         if open_price_input is None:
             print("用户取消输入，程序退出！")
             root.destroy()
             exit()
-        pre_settle_input = simpledialog.askfloat(f"{url}", f"请手动查询{target_code}品种的昨日结算价 >>>")
+        pre_settle_input = simpledialog.askfloat(f"{url}", f"请输入期货品种的前日结算价{target_code} >>>")
         if pre_settle_input is None:
             print("用户取消输入，程序退出！")
             root.destroy()
             exit()
-        pre_close_input = simpledialog.askfloat(f"{url}", f"请手动查询{target_code}品种的前日收盘价 >>>")
+        pre_close_input = simpledialog.askfloat(f"{url}", f"请输入期货品种的前日收盘价{target_code} >>>")
         if pre_close_input is None:
             print("用户取消输入，程序退出！")
             root.destroy()

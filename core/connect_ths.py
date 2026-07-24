@@ -1,7 +1,7 @@
 from datetime import datetime
 from pywinauto import Application, mouse
 from time import sleep
-from public.anti_screensaver import kill_unprotected_process
+from public.anti_screensaver import kill_blacklist_process
 import random
 import os
 from pywinauto.controls.uiawrapper import UIAWrapper
@@ -10,7 +10,7 @@ from pywinauto.timings import TimeoutError, wait_until
 import psutil
 from pywinauto import ElementAmbiguousError
 from public.print_context import print_context
-from public.close_ad_window import close_ad_windows
+# from public.close_ad_window import close_ad_windows
 from public import shared_data
 from public.shared_data import simulate_input
 from pywinauto import Desktop, mouse
@@ -113,7 +113,8 @@ def auto_login(ths_window):
         shared_data.login_control.clear()
         shared_data.login_control['期货户'] = [user_type_btn, user_type_btn.rectangle()]
 
-    close_ad_windows()
+    # close_ad_windows()
+    kill_blacklist_process()  # 功能更强大，替换close_ad_windows()
     # 唤起登录弹窗
     shared_data.login_control['期货户'][0].click_input()
     sleep(2)
@@ -125,7 +126,7 @@ def auto_login(ths_window):
     desktop = Desktop(backend="uia")
     subwindow = None
     while not exist_flag and wait_cnt < max_wait:
-        close_ad_windows()  # 每次循环都要清理一下广告弹窗
+        kill_blacklist_process()  # 每次循环都要清理一下广告弹窗
         try:
             subwindow = ths_window.child_window(title="同花顺期货通交易", control_type="Window")
             # subwindow = desktop.window(title_re=r".*同花顺期货通交易.*", control_type="Window", timeout=1)
@@ -211,7 +212,7 @@ def check_ths_status():
         app = Application(backend="uia").connect(process=happ_pid, timeout=5)
         # ths_window = app.window(title_re=r".*同花顺期货通.*", control_type="Window")
         ths_window = app.window(control_type="Window", visible_only=False)
-        close_ad_windows()  # 关闭弹窗确保启动顺利进行
+        kill_blacklist_process()  # 关闭弹窗确保启动顺利进行
         ths_window.set_focus()
         ths_window.maximize()
         qhh_btn = ths_window.child_window(control_type='Button', title_re='期货户|期货用户')
@@ -387,7 +388,7 @@ def set_loss_profit(param: dict=None):
         # print(f"cx: {rect.left}, cy: {rect.top}")
         mouse.click(button="left", coords=(rect.right + 50, rect.top + 20))
         # 杀屏保程序，以防在启动止损止盈设置时出现遮挡
-        kill_unprotected_process()
+        kill_blacklist_process()
         print("已完成屏保、壁纸等遮挡处理！")
         create_win = ths_window.child_window(control_type="Window", title="云止损单")
         create_win.wait("visible", timeout=3)
