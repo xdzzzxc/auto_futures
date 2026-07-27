@@ -338,10 +338,11 @@ def _init_shared_data(user_type, target_days, lot_size=1, get_price_interval=5):
     shared_data.interval = get_price_interval  # 获取即时行情价格的时间间隔
     prefix = re.match(r'[a-zA-Z]+', ts_code).group()
     shared_data.min_price_change = futures_info[prefix]['min_price_change']
-    get_open_price()
+    # get_open_price()
     fetch_future_data()
     print(f"[{shared_data.ts_code}]历史交易数据：{shared_data.history_data_analysis}")
     check_ths_status()  # 检查同花顺期货通启动状态
+    get_open_price()
 
 if __name__ == "__main__":
     _init_shared_data(

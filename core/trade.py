@@ -1,6 +1,6 @@
 from time import sleep
 from datetime import datetime
-
+from data.data_from_sina import judge_trend
 import pandas as pd
 import numpy as np
 from public.jiaoyisuo import get_future_info
@@ -16,41 +16,107 @@ from public.shared_data import get_data_cache_dir
 logger = setup_trade_loggers()
 pd.set_option("display.max_rows", None)
 
-# 分箱分析当日交易价格
-def bin_analyzer(ts_code=None, bin_num=None, read_mode=None):
-    read_mode = read_mode if read_mode is not None else shared_data.read_mode
-    ts_code = ts_code if ts_code is not None else shared_data.ts_code
-    bin_num = bin_num if bin_num is not None else shared_data.BIN_NUM
-    # 获取期货品种ts_code的今日开盘价等信息
-    open_info = get_open_price(ts_code)
-    print(f'open_info:{open_info}')
-    open_price = open_info[ts_code]['open']
-    # print(f'[{ts_code}]开盘价：{open_price}')
-    if not read_mode:
-        df = read_db(full_ts_code=ts_code)
+def get_gap_bin_info(bin_dict, gap_value: float, contract: str):
+    contract_data = bin_dict[contract]
+    if gap_value > 0:
+        target_group = contract_data["gap_pos"]
+        gap_label = "gap_pos"
+    elif gap_value < 0:
+        target_group = contract_data["gap_neg"]
+        gap_label = "gap_neg"
     else:
-        df = shared_data.cur_price_deque
-        
+        return None
+    # 修复边界匹配问题，左右都包含
+    for range_tuple, stat_info in target_group.items():
+        left, right = range_tuple
+        if left <= gap_value <= right:
+            # 嵌套标识字典返回
+            return {
+                "gap_type": gap_label,
+                "stat": stat_info
+            }
+    # 无匹配返回空
+    return {
+        "gap_type": gap_label,
+        "stat": None
+    }
 
+def bin_analyzer(ts_code=None, direction=None):
+    # 合约校验
+    ts_code = ts_code if ts_code is not None else shared_data.ts_code
+    if ts_code is None:
+        print_context("无效的期货品种 - 你可能没有指定具体的品种代码！")
+        exit()
 
+    # 入参direction为空时，自动读取全局shared_data.direction作为返回分支判断依据
+    if direction is None:
+        direction = getattr(shared_data, "direction", None)
 
+    # 获取开盘、昨结，计算当日开结差
+    open_info = get_open_price(ts_code)
+    open_price = open_info[ts_code]['open']
+    pre_settle = open_info[ts_code]['pre_settle']
+    current_gap = open_price - pre_settle
 
-    if df is None or df.empty:
-        print_context("数据库查询无数据或读取失败，终止分箱分析")
-        return
-    print(f"df:{df}")
-    df["bin"], bin_edges = pd.cut(
-        df["price"],
-        bins=bin_num,
-        retbins=True,
-        include_lowest=True,
-        precision=2
-    )
-    bin_edges = np.round(bin_edges, 2)
-    print(df)
-    print("=" * 80)
-    print(bin_edges)
+    # ========== 先定义内部匹配函数（提前定义，消除NameError）==========
+    def get_match_stat(source_bin_dict):
+        contract_data = source_bin_dict[ts_code]
+        if current_gap > 0:
+            gap_key = "gap_pos"
+            target_group = contract_data["gap_pos"]
+        elif current_gap < 0:
+            gap_key = "gap_neg"
+            target_group = contract_data["gap_neg" ]
+        else:
+            # 平开无跳空
+            return None, None
 
+        match_data = None
+        for range_tuple, stat_info in target_group.items():
+            left, right = range_tuple
+            if left <= current_gap <= right:
+                match_data = stat_info
+                break
+        return gap_key, match_data
+
+    # 临时覆盖全局shared_data.direction供judge_trend计算分箱，执行完恢复原始值
+    original_dir = getattr(shared_data, "direction", None)
+    if direction is not None:
+        shared_data.direction = direction
+    try:
+        final_rise_bin_result, final_fall_bin_result = judge_trend(ts_code, days=20)
+    finally:
+        # 恢复全局变量，不污染外部环境
+        if original_dir is not None:
+            shared_data.direction = original_dir
+        elif hasattr(shared_data, "direction"):
+            delattr(shared_data, "direction")
+
+    # 匹配涨、跌分箱数据
+    rise_gap_key, rise_stat = get_match_stat(final_rise_bin_result)
+    fall_gap_key, fall_stat = get_match_stat(final_fall_bin_result)
+
+    # 组装指定嵌套字典格式
+    full_rise_output = {}
+    full_fall_output = {}
+    if rise_gap_key and rise_stat is not None:
+        full_rise_output[ts_code] = {"rise": {rise_gap_key: rise_stat}}
+    if fall_gap_key and fall_stat is not None:
+        full_fall_output[ts_code] = {"fall": {fall_gap_key: fall_stat}}
+
+    # 打印提示
+    gap_desc = "高开 gap_pos" if current_gap > 0 else "低开 gap_neg" if current_gap < 0 else "平开无跳空"
+    print(f"===== 今日跳空类型：{gap_desc} 差值={current_gap} =====")
+    print(f"【历史收涨行情匹配数据】{full_rise_output}")
+    print(f"【历史收跌行情匹配数据】{full_fall_output}")
+
+    # 分支返回逻辑
+    if direction == "Rise":
+        return full_rise_output, {}
+    elif direction == "Fall":
+        return {}, full_fall_output
+    else:
+        return full_rise_output, full_fall_output
 
 
 def opening_session_trade(ts_code=None):
@@ -231,4 +297,6 @@ def order(ts_code=None):
 if __name__ == "__main__":
     # order(ts_code="m2609")
     # opening_session_trade(ts_code="jd2609")
-    bin_analyzer(ts_code="jd2609", bin_num=None)
+    shared_data.direction = "Fall"
+    rise_data, fall_data = bin_analyzer(ts_code="c2609")
+    print(f"=====今日开盘与历史数据匹配结果=====\n做多参考数据： {rise_data}\n做空参考数值： {fall_data}")

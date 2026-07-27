@@ -1,48 +1,50 @@
-from public.print_context import print_context
-from time import sleep
 from datetime import datetime
 from public import shared_data
-from public import print_context
-import random
+from public.print_context import print_context
+from public.shared_data import ths_lock
+from data.db_price import write_price
+from data.db_price import batch_write_price
+import re, time
+from time import sleep
 
+FLUSH_INTERVAL = shared_data.FLUSH_INTERVAL  # 刷新缓冲区时间间隔，其设置值由main.py模块中的_init_()中完成
+MAX_BUFFER_COUNT = shared_data.MAX_BUFFER_COUNT
 
 def get_current_price(ts_code=None):
+    from public.shared_data import simulate_input
+    price_patten = re.compile(r"^\d+\.\d+$|^\d+$")
     is_printed = False
     if ts_code is None:
-        ts_code = shared_data.ts_code
+        ts_code = shared_data.ts_code if shared_data.ts_code is not None else "m2609"
 
-    # 解锁 + 切换品种（只执行一次）
-    try:
-        if shared_data.ths_common_control['商品锁'][2] == "GeometryGroup.TradeLock":
-            shared_data.ths_common_control['商品锁'][0].click_input()
-            sleep(random.uniform(0.2, 0.5))
-
-        shared_data.trade_window.set_focus()
-        shared_data.ths_common_control['期货代码'][0].set_text(ts_code)
-        sleep(random.uniform(0.2, 0.5))
-        shared_data.ths_common_control['期货代码'][0].type_keys('{ENTER}')
-        sleep(random.uniform(0.2, 0.5))
-        shared_data.click_position(shared_data.ths_common_control["商品锁"][1])
-    except:
-        print_context("⚠️ 切换合约失败，继续重试...")
+    with ths_lock:
+        code_ctrl = shared_data.ths_common_control['期货代码'][0]
+        lock_ctrl = shared_data.ths_common_control["商品锁"][0]
+    # 在期货代码控件内锁定交易品种以获取即时行情价格
+    window = shared_data.trade_window
+    if code_ctrl.window_text() != ts_code:
+        if lock_ctrl.is_enabled():
+            simulate_input(ctrl=code_ctrl, window=window, value=ts_code)
+            lock_ctrl.click_input()
+        else:
+            lock_ctrl.click_input()
+            simulate_input(ctrl=code_ctrl, window=window, value=ts_code)
+            lock_ctrl.click_input()
 
     # 主循环
     while True:
-        shared_data.trade_flag()
-
         # 非交易时间
-        if not shared_data.tradeoff:
+        if not shared_data.trade_flag():
             if not is_printed:
-                print_context(f"[{datetime.now()}] 非交易时间，等待开盘...")
-                print_context(f'已缓存价格条数：{len(shared_data.cur_price_deque)}')
+                print_context(f"[{datetime.now()}] 非交易时间，等待开市...")
+                # print_context(f'已缓存价格条数：{len(shared_data.cur_price_deque)}')
                 is_printed = True
-            sleep(2)
+            sleep(0.5)
             continue
 
         # 交易时间
         is_printed = False
         date_inner = datetime.now().strftime("%Y%m%d%H%M%S")
-
         # ====================== 【核心修复：安全读取价格】 ======================
         try:
             # 加锁读取界面控件（防止多线程崩溃）
@@ -50,35 +52,37 @@ def get_current_price(ts_code=None):
                 price_ctrl = shared_data.ths_common_control['即时价格'][0]
                 price_text = price_ctrl.window_text().strip()
 
-            # 价格为空直接跳过
-            if not price_text:
-                sleep(1)
+            # 价格为空直接跳过，保留休眠限流UI扫描
+            if not price_text or not price_patten.match(price_text):
+                sleep(0.2)
                 continue
 
-            # 存入队列（安全写法）
-            with shared_data.deque_lock:
-                shared_data.cur_price_deque.append((date_inner, price_text))
+            # 匹配目标合约，写入内存缓冲区，不再直接写DB
+            current_ts = time.time()
+            if code_ctrl.window_text() == ts_code:
+                row = [date_inner, price_text, ts_code]
+                # 线程安全追加缓冲区
+                with shared_data.buffer_lock:
+                    shared_data.price_buffer.append(row)
 
+                # 判断是否满足批量写入条件：超时 或 缓冲区满
+                if (current_ts - shared_data.last_flush_ts >= FLUSH_INTERVAL) or len(
+                        shared_data.price_buffer) >= MAX_BUFFER_COUNT:
+                    # 批量落库
+                    with shared_data.buffer_lock:
+                        batch_data = shared_data.price_buffer.copy()
+                        shared_data.price_buffer.clear()
+                        shared_data.last_flush_ts = current_ts
+                    # 批量写入，仅一次数据库IO
+                    if batch_data:
+                        batch_write_price(batch_data)  # 实现批量插入接口
+
+            # 读到有效数据短休眠，平衡实时与CPU
         except Exception as e:
-            # 读取失败不崩溃，跳过即可
-            # print_context(f"价格读取异常：{str(e)}")
-            sleep(1)
+            sleep(0.2)
             continue
+        sleep(shared_data.get_price_interval)  # 获取即时品种市场价格的时间间隔设置
 
-        # ====================== 【安全打印最近10条价格】 ======================
-        try:
-            with shared_data.dict_lock:
-                dq_list = list(shared_data.cur_price_deque)
-                latest_10 = []
-                for item in dq_list[-10:]:
-                    try:
-                        latest_10.append(float(item[1].strip()))
-                    except:
-                        continue
-
-                print(f'\r[{datetime.now().strftime("%H:%M:%S")}] 已获取 {len(shared_data.cur_price_deque)} 条 | 最新10条：{latest_10}',
-                      end='', flush=True)
-        except:
-            pass
-
-        sleep(10)
+if __name__ == "__main__":
+    print(shared_data.trade_flag())
+    # get_current_price(ts_code="lu2604")
