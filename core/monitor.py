@@ -98,7 +98,7 @@ def monitor_profit_loss():
                 # logger.info(f"current price: {current_price}\nprofit: {profit}")
 
         except (ValueError, Exception):
-            sleep(0.5)
+            sleep(0.2)
             continue
 
 

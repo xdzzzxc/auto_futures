@@ -157,7 +157,7 @@ def kill_blacklist_process():
             if first_print:
                 print(f"\r后台查杀黑名单进程 | 进程:{p_name}", flush=True, end="")
                 sleep(1)
-                print(f"\r{'' * 100}", flush=True, end="\n")
+                print(f"\r{' ' * 100}", flush=True, end="\n")
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
         except Exception:
@@ -182,6 +182,6 @@ def main_daemon():
 
 if __name__ == "__main__":
     # 管理员运行
-    # main_daemon()
+    main_daemon()
     kill_blacklist_process()
-    close_only_target_popup()
+    # close_only_target_popup()

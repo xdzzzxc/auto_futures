@@ -12,10 +12,12 @@ import os
 
 from tushare import shibor_data
 
+
 user_type = 0  # 0-模拟用户  1-国泰君安期货用户
 user_name = {0: "模拟交易-1811889418", 1: "国泰君安_CTP85415809"}  # 模拟交易-1811889418 国泰君安_CTP85415809
 trade_window = None  # 同花顺交易平台桌面对象
-
+# 打印限制设置（1次）
+print_on_off = True
 # 期货品种即时行情价格缓冲区及相关安全配置
 get_price_interval = 5  # 从同花顺窗口读取即时价格的时间间隔，默认为5秒
 current_price_dict = {}  # 即时行情中的期货商品买卖价格
@@ -31,6 +33,7 @@ read_mode = True  # 读取期货品种的当日价格模式：默认是deque数�
 deque_lock = threading.Lock()
 # 鼠标锁：平仓点击鼠标、防屏保壁纸程序使用鼠标
 mouse_lock = threading.Lock()
+sideways_product_list = {"m", "c", "jd"}
 
 # __________________________________________________
 login_control = {}  # 登录期货通交易软件
@@ -42,14 +45,14 @@ dict_lock = threading.Lock()  # 创建字典读写线程安全锁
 ths_future_edit_lock = False  # 期货名称输入（edit）框是否锁定，默认是False，亦即可以输入、编辑
 ts_code = ""  # 期货商品代码（如au2601)
 search_future_list = []  # 待搜索的期货商品代码列表
-open_price = {}  # 交易品种开盘价信息：trade.order()
+open_price = None  # 交易品种开盘价信息：trade.order()
 pre_profit = 0.0  # 手动设置固定止盈值
 pre_loss = 0.0  # 手动设置固定止损值
-target_days = 10  # 从tu_share获取ts_code历史行情数据（天数）
+target_days = 20  # 从tu_share获取ts_code历史行情数据（天数）
 lot_size = 1  # 期货买卖手数，默认值1，不同商品规定必须最少多少手
-direction = ""  # 如果有专业推荐，直接写买多-Rise、卖空-Fall，否则由历史数据与今日开盘价来确定多空方向
+direction = "Sideways"  # 如果有专业推荐，直接写买多-Rise、卖空-Fall，否则由历史数据与今日开盘价来确定多空方向
 history_trade_df = None  # 期货品种历史交易原始数据，dataframe格式；
-history_data_analysis = {}  # 期货商品历史交易数据，来源于future_data模块
+history_data_analysis = None  # 期货商品历史交易数据，来源于future_data模块
 order_param_dict = {"云止损单": 3120, "云止盈单": 3050, "云保本单": None}  # 对应止损止盈设置
 future_quote_dict = {}  # 期货行情 https://push2.eastmoney.com/api/qt/ulist.np/get
 future_info_dict = {}  # 期货资讯行情
@@ -72,6 +75,7 @@ def is_trade_status() -> bool:
     判断是否持仓或是否在交易状态中：权益 != 可用资金 → 有持仓、交易中、返回True
     返回：True=有持仓 / False=无持仓
     """
+    global print_on_off
     valid_chars = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "-"}
 
     try:
@@ -89,7 +93,9 @@ def is_trade_status() -> bool:
 
         equity = get_num(equity_text)  # 权益资金即用户总资金
         available = get_num(available_text)  # 可用资金（如果在交易中则可用资金就会小于总资金）
-
+        if print_on_off:
+            print(f"权益：{equity} 可用资金：{available}")
+            print_on_off = False
         # 差异 > 1 元判定为有持仓
         return abs(equity - available) > 1.0
 

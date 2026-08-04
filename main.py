@@ -340,14 +340,41 @@ def _init_shared_data(user_type, target_days, lot_size=1, get_price_interval=5):
     shared_data.min_price_change = futures_info[prefix]['min_price_change']
     # get_open_price()
     fetch_future_data()
-    print(f"[{shared_data.ts_code}]历史交易数据：{shared_data.history_data_analysis}")
+    # print(f"[{shared_data.ts_code}]历史交易数据：{shared_data.history_data_analysis}")
     check_ths_status()  # 检查同花顺期货通启动状态
     get_open_price()
 
 if __name__ == "__main__":
+    # 在这里注册钩子和信号，目标是在退出pycharm或关闭windows时将缓存中的数据写入数据库文件中
+    import atexit
+    import signal
+    # from data.db_price import flush_remain_buffer
+
+
+    def exit_clean():
+        print("\n🛑 程序触发退出，正在落地行情缓存...")
+        try:
+            flush_remain_buffer()
+            print("✅ 缓存全部写入数据库完成")
+        except Exception as e:
+            print(f"❌ 缓存落库异常: {e}")
+
+
+    atexit.register(exit_clean)
+
+
+    def signal_handler(signum, frame):
+        exit_clean()
+        raise SystemExit(0)
+
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
+    # 完成注册，进行程序初始化阶段
     _init_shared_data(
         user_type=0,  # 0-虚拟用户，1-国泰君安期货用户
-        target_days=5,  # 期货品种历史交易日数据，从前一个交易日往前推
+        target_days=20,  # 期货品种历史交易日数据，从前一个交易日往前推
         lot_size=1,  # 交易手数，不同期货品种有不同的最低交易手数
         get_price_interval=5  # 每5秒获取一次品种价格
     )

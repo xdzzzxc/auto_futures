@@ -163,6 +163,7 @@ def get_future_info(symbol: str) -> Dict[str, Any] | None:
     info_dict: Dict[str, Any] = {"ts_code": symbol, "code": code}
     try:
         d = futures_info[code]
+        d["coefficient"] = round(float(d["one_tick_profit"]) // float(d["min_price_change"]), 2)
     except KeyError:
         return None
     info_dict.update(d)

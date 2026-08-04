@@ -337,12 +337,13 @@ def local_control():
     ts_code = shared_data.ts_code or "m2609"
     if code_ctrl.window_text() != ts_code:
         if code_ctrl.is_enabled():
-            simulate_input(ctrl=code_ctrl, window=window, value=ts_code)
+            simulate_input(ctrl=code_ctrl, window=window, value=ts_code)  # 模拟输入
             lock_ctrl.click_input()
         else:
             lock_ctrl.click_input()
             simulate_input(ctrl=code_ctrl, window=window, value=ts_code)
             lock_ctrl.click_input()
+    else:
         if code_ctrl.is_enabled():
             lock_ctrl.click_input()
 
@@ -353,7 +354,7 @@ def set_loss_profit(param: dict=None):
     """
     if param is None:
         param = shared_data.order_param_dict.copy()  # 即时行情价分析结果
-    app = None
+
     # ths_window = None
     fut_code = shared_data.ts_code or "m2609"
 

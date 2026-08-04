@@ -23,7 +23,9 @@ def get_current_price(ts_code=None):
     # 内部工具函数：实时获取界面当前合约
     def get_ui_contract():
         with ths_lock:
-            return code_ctrl.window_text().strip()
+            new_ts_code = code_ctrl.window_text().strip()
+            shared_data.ts_code = new_ts_code if new_ts_code else ts_code
+            return new_ts_code
 
     # 初始化界面合约
     current_ui_code = get_ui_contract()
