@@ -10,24 +10,27 @@ from log.trade_log import setup_trade_loggers
 logger = setup_trade_loggers()
 UI_DELAY_SHORT = 0.2
 MONITOR_INTERVAL = 0.5
-NO_HOLD_PRINT_INTERVAL = 60  # 无持仓每60秒打印一次，不刷屏
+NO_HOLD_PRINT_INTERVAL = 6000  # 无持仓每60秒打印一次，不刷屏
 
-def auto_trade():
+def auto_trade(trade_dir=None):
     """负责点击买多或卖空进行期货品种下单"""
-
+    if trade_dir is None:
+        print_context("没有明确的交易方向！")
+        return
     shared_data.trade_window.maximize()
     shared_data.trade_window.set_focus()
     controls = shared_data.ths_common_control
-    order_params = shared_data.trade_menu_dict  # 获取定单参数表
+    # order_params = shared_data.trade_menu_dict  # 获取定单参数表
     sleep(0.5)
-    current_time = datetime.now().time()
+    current_time = datetime.now()
     # 买多 / 卖空
-    if order_params.get('交易方向') == "Rise":
+    if trade_dir == "rise":
         click_position(controls["买多"][1])
+
     else:
         click_position(controls["卖空"][1])
 
-    print_context(f"程序已成功下单，正在交易中......[{order_params['交易方向']}]")
+    print_context(f"[{current_time.strftime('%H:%M:%S')}]程序已成功下单[{trade_dir}]，正在交易中......")
 
 
 def monitor_profit_loss():

@@ -206,7 +206,7 @@ def read_db(full_ts_code, start_time=None, end_time=None, counts=None, ascending
 
     # 拼接数据库路径 YYYYMMDD.db
     db_path = os.path.join(base_db_folder, f"{target_db_date}.db")
-    print_context.print_context(f"【调试】当前小时{current_hour}，使用数据库文件：{db_path}")
+    print_context.print_context(f"现在是夜场交易时段：{now.strftime('%Y%m%d %H:%M:%S')}，使用数据库文件：{db_path}")
 
     if not os.path.exists(db_path):
         print_context.print_context(f"No filepath:{db_path} (对应日期库不存在，无行情数据)")
@@ -235,12 +235,12 @@ def read_db(full_ts_code, start_time=None, end_time=None, counts=None, ascending
     # 排序
     order = "ORDER BY record_time ASC" if ascending else "ORDER BY record_time DESC"
     sql = f"{base_sql} {order}"
-    print_context.print_context(f"【调试】执行SQL：{sql} 参数:{params}")
+    # print_context.print_context(f"【调试】执行SQL：{sql} 参数:{params}")
 
     try:
         with sqlite3.connect(db_path, timeout=10) as conn:
             df = pd.read_sql(sql, conn, params=params)
-        print_context.print_context(f"【调试】查询返回原始行数：{len(df)}")
+        # print_context.print_context(f"【调试】查询返回原始行数：{len(df)}")
         df["dt"] = pd.to_datetime(df["record_time"], format="%Y%m%d%H%M%S")
         if counts and isinstance(counts, int) and counts > 0:
             df = df.head(counts)

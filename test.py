@@ -1,22 +1,9 @@
-import ast
-x=1
-y=2
-expr = "x == y"
-strr = f"x:{x} y:{y}, '{expr}':{eval(expr)}"
-print(strr)
+# 自定义命名空间（一本临时通讯录：名字→值）
+ns = {"open": 3000, "fall": "枚举对象_做空"}
 
-code = """
-x = 100
-y = x * 2
-print(y)
-"""
-exec(code)
-# print(res) # None，没有返回值
-node = ast.parse("[1,2,3]", mode="eval").body
-res = ast.literal_eval(node)
-print(res)
+# eval第2个参数就是传入这个命名空间ns
+res1 = eval("open + 50", ns, {})
+res2 = eval("fall", ns, {})
 
-text = "{'ts_code':'000001','price':12.5}"
-data = ast.literal_eval(text)
-print(data["ts_code"])
-print(type(data)) # dict
+print(res1)   # 3050
+print(res2)   # 枚举对象_做空

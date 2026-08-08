@@ -7,9 +7,10 @@ import time
 import pyperclip
 from pywinauto import mouse
 from chinese_calendar import is_holiday  # 纯本地节假日库，一次安装永久用
-import subprocess
+from public.print_context import print_context
 import os
-
+from pathlib import Path
+from datetime import timedelta
 from tushare import shibor_data
 
 
@@ -18,8 +19,10 @@ user_name = {0: "模拟交易-1811889418", 1: "国泰君安_CTP85415809"}  # 模
 trade_window = None  # 同花顺交易平台桌面对象
 # 打印限制设置（1次）
 print_on_off = True
+
 # 期货品种即时行情价格缓冲区及相关安全配置
 get_price_interval = 5  # 从同花顺窗口读取即时价格的时间间隔，默认为5秒
+k_minutes = 5  # 设置指定时长的最后一根K线的时间
 current_price_dict = {}  # 即时行情中的期货商品买卖价格
 cur_price_deque = deque(maxlen=20000)
 price_buffer = []  # 缓冲区
@@ -202,11 +205,77 @@ def get_direction(title="交易方向", msg=None) -> str | None:
     # 其余逻辑不变...
     root.wait_window() # 替换mainloop，阻塞等待弹窗关闭
 
+def clean_old_trade_db(db_folder_path: str = None, dry_run: bool = True):
+    """
+    21点以后清理历史交易日数据库文件
+    :param db_folder_path: db文件夹完整路径
+    :param dry_run: True=仅打印待删除，不真实删除；False=执行真实删除
+    :return: (keep_list, delete_list)
+    """
+    now = datetime.now()
+    current_hour = now.hour
+    db_folder_path = Path(get_data_cache_dir()) / "db"
+    print(db_folder_path)
+    # 只有21点及以后执行清理
+    if current_hour < 21:
+        print_context(f"程序会在交易日的21:00:00后清除旧数据！ 当前时间： {now.strftime('%H:%M:%S')}")
+        return [], []
 
+    today_str = now.strftime("%Y%m%d")
+    next_day_str = (now + timedelta(days=1)).strftime("%Y%m%d")
+
+    # 需要保留的db文件名（不带路径）
+    keep_db_names = {f"{today_str}.db", f"{next_day_str}.db"}
+    # 连带保留wal/shm
+    keep_aux = set()
+    for name in keep_db_names:
+        base = os.path.splitext(name)[0]
+        keep_aux.add(f"{base}.db‑wal")
+        keep_aux.add(f"{base}.db‑shm")
+
+    keep_all = keep_db_names.union(keep_aux)
+
+    if not os.path.isdir(db_folder_path):
+        print_context(f"目录不存在:{db_folder_path}")
+        return [], []
+
+    keep_list = []
+    delete_list = []
+
+    for fname in os.listdir(db_folder_path):
+        full_path = os.path.join(db_folder_path, fname)
+        if not os.path.isfile(full_path):
+            continue
+        # 只处理db、db‑wal、db‑shm后缀
+        ext = os.path.splitext(fname)[1]
+        if not (fname.endswith(".db") or fname.endswith(".db‑wal") or fname.endswith(".db‑shm")):
+            continue
+
+        if fname in keep_all:
+            keep_list.append(fname)
+        else:
+            delete_list.append(full_path)
+
+    print_context(f"【db清理】保留文件:{keep_list},待删除数量:{len(delete_list)}")
+
+    # 执行删除
+    for file_path in delete_list:
+        try:
+            if dry_run:
+                print_context(f"[模拟删除] {os.path.basename(file_path)}")
+            else:
+                os.remove(file_path)
+                print_context(f"✅已删除 {os.path.basename(file_path)}")
+        except PermissionError:
+            print_context(f"❌删除失败，文件被占用（sqlite连接未关闭）:{file_path}")
+        except Exception as e:
+            print_context(f"❌删除异常 {file_path} err:{str(e)}")
+    return None
 
 
 
 if __name__ == "__main__":
     # print_context(f"今天是：{datetime.now().strftime('%Y/%m/%d %H:%M:%S')},期货交易：{is_trade_period}")
     # print(default_futures)
-    get_direction()
+    # get_direction()
+    clean_old_trade_db()

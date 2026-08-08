@@ -20,13 +20,14 @@ from data.db_price import flush_remain_buffer
 from data.reget_open_price import reget_open_price
 from main_monitor.run_monitor import run_monitor
 from public.anti_screensaver import main_daemon
+from public.shared_data import clean_old_trade_db
 
 def get_direction(title="交易方向", msg=None) -> str | None:
     default_dir = shared_data.direction
     if msg is None:
         msg = (f"金投网推荐[{shared_data.ts_code}]: {'暂无推荐' if not shared_data.direction else shared_data.direction}"
                f"\n要变更交易方向，请手动选择！")
-    OPTIONS = ["Rise", "Fall", "Sideways", "Cautious", "Ease"]
+    OPTIONS = ["rise", "fall", "sideways", "cautious", "ease"]
 
     root = tk.Tk()
     root.title(title)
@@ -159,7 +160,7 @@ def select_future():
     required_contracts = shared_data.quote_list  # ["m2609", "c2609", "jd2609"]
 
     # 默认趋势（如果资讯里没有，就给一个默认值）
-    default_trend = "Sideways"
+    default_trend = "sideways"
 
     for code in required_contracts:
         # 构造显示文本
@@ -338,7 +339,7 @@ def _init_shared_data(user_type, target_days, lot_size=1, get_price_interval=5):
     shared_data.interval = get_price_interval  # 获取即时行情价格的时间间隔
     prefix = re.match(r'[a-zA-Z]+', ts_code).group()
     shared_data.min_price_change = futures_info[prefix]['min_price_change']
-    # get_open_price()
+    clean_old_trade_db(dry_run=False)
     fetch_future_data()
     # print(f"[{shared_data.ts_code}]历史交易数据：{shared_data.history_data_analysis}")
     check_ths_status()  # 检查同花顺期货通启动状态
@@ -348,8 +349,6 @@ if __name__ == "__main__":
     # 在这里注册钩子和信号，目标是在退出pycharm或关闭windows时将缓存中的数据写入数据库文件中
     import atexit
     import signal
-    # from data.db_price import flush_remain_buffer
-
 
     def exit_clean():
         print("\n🛑 程序触发退出，正在落地行情缓存...")
