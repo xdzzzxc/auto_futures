@@ -19,6 +19,13 @@ user_name = {0: "模拟交易-1811889418", 1: "国泰君安_CTP85415809"}  # 模
 trade_window = None  # 同花顺交易平台桌面对象
 # 打印限制设置（1次）
 print_on_off = True
+# 设置有效的交易时间间隔
+valid_trade_interval = 300  # 5分钟后允许继续交易
+cur_date = datetime.today()
+valid_time = None  # 通过上面参数和具体交易时间决定下一次的交易时间,默认是成功启动并登录用户后的时刻
+valid_time_lock = threading.Lock()  # 创建锁
+# market_ctx行情上下文参数（eval命名空间）
+market_ctx_dict = {}
 
 # 期货品种即时行情价格缓冲区及相关安全配置
 get_price_interval = 5  # 从同花顺窗口读取即时价格的时间间隔，默认为5秒
@@ -36,6 +43,7 @@ read_mode = True  # 读取期货品种的当日价格模式：默认是deque数�
 deque_lock = threading.Lock()
 # 鼠标锁：平仓点击鼠标、防屏保壁纸程序使用鼠标
 mouse_lock = threading.Lock()
+ui_busy: bool = False
 sideways_product_list = {"m", "c", "jd"}
 
 # __________________________________________________
@@ -48,7 +56,7 @@ dict_lock = threading.Lock()  # 创建字典读写线程安全锁
 ths_future_edit_lock = False  # 期货名称输入（edit）框是否锁定，默认是False，亦即可以输入、编辑
 ts_code = ""  # 期货商品代码（如au2601)
 search_future_list = []  # 待搜索的期货商品代码列表
-open_price = None  # 交易品种开盘价信息：trade.order()
+open_price = {}  # 交易品种开盘价信息：trade.order()
 pre_profit = 0.0  # 手动设置固定止盈值
 pre_loss = 0.0  # 手动设置固定止损值
 target_days = 20  # 从tu_share获取ts_code历史行情数据（天数）
@@ -56,7 +64,7 @@ lot_size = 1  # 期货买卖手数，默认值1，不同商品规定必须最少
 direction = "Sideways"  # 如果有专业推荐，直接写买多-Rise、卖空-Fall，否则由历史数据与今日开盘价来确定多空方向
 history_trade_df = None  # 期货品种历史交易原始数据，dataframe格式；
 history_data_analysis = None  # 期货商品历史交易数据，来源于future_data模块
-order_param_dict = {"云止损单": 3120, "云止盈单": 3050, "云保本单": None}  # 对应止损止盈设置
+loss_profit_param = {"云止盈单": 3450, "云止损单": 3120, "云保本单": 0}  # 对应止损止盈设置3450,3120
 future_quote_dict = {}  # 期货行情 https://push2.eastmoney.com/api/qt/ulist.np/get
 future_info_dict = {}  # 期货资讯行情
 # "交易方向", "交易价", "止损价", "止盈价", "交易前总额", "交易后总额", "利润"

@@ -29,9 +29,10 @@ def auto_trade(trade_dir=None):
 
     else:
         click_position(controls["卖空"][1])
+    cur_price = float(controls["即时价格"][0].window_text().strip())
 
-    print_context(f"[{current_time.strftime('%H:%M:%S')}]程序已成功下单[{trade_dir}]，正在交易中......")
-
+    print_context(f"[{current_time.strftime('%H:%M:%S')}]程序已成功下单[{trade_dir} - {cur_price}]，正在交易中......")
+    return cur_price
 
 def monitor_profit_loss():
     # ============== 自动止损止盈执行平仓 ==============
@@ -46,7 +47,7 @@ def monitor_profit_loss():
                 sleep(2)  # 平仓后等待同花顺成交弹窗刷新，冷却操作！
             send_msg(f"自动平仓成功 - 品种：{ts_code}\n{msg}")
             shared_data.trade_menu_dict.clear()
-            shared_data.order_param_dict.clear()
+            # shared_data.order_param_dict.clear()
             # shared_data.pre_profit = 0
             # shared_data.pre_loss = 0
             shared_data.threading_monitor_profit_loss = False

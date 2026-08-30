@@ -8,7 +8,7 @@ from core.connect_ths import check_ths_status
 from core.trade import order
 from log.trade_log import setup_trade_loggers
 from data.collect_current_price import get_current_price
-from data.future_trend import query_future_info
+from data.future_trend import query_future_info, merge_two_info_dict
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
@@ -144,7 +144,8 @@ def show_custom_choicebox(choices, title="选择品种", msg="请选择期货品
     return selected
 
 def select_future():
-    futures_info_dict = query_future_info()
+    # futures_info_dict = query_future_info()
+    futures_info_dict = merge_two_info_dict()
     choices = []
     code_map = {}
 
@@ -154,22 +155,22 @@ def select_future():
         choices.append(display_text)
         code_map[display_text] = (code, trend)
 
-    # ====================== 【核心：强制加入你的必备品种】 ======================
-    # 不管资讯有没有，这几个必须出现在选择框里
-    from public import shared_data
-    required_contracts = shared_data.quote_list  # ["m2609", "c2609", "jd2609"]
-
-    # 默认趋势（如果资讯里没有，就给一个默认值）
-    default_trend = "sideways"
-
-    for code in required_contracts:
-        # 构造显示文本
-        display_text = f"{code}-{default_trend}-必备品种"
-
-        # 如果已经存在，就不重复添加
-        if display_text not in choices:
-            choices.append(display_text)
-            code_map[display_text] = (code, default_trend)
+    # # ====================== 【核心：强制加入你的必备品种】 ======================
+    # # 不管资讯有没有，这几个必须出现在选择框里
+    # from public import shared_data
+    # required_contracts = shared_data.quote_list  # ["m2609", "c2609", "jd2609"]
+    #
+    # # 默认趋势（如果资讯里没有，就给一个默认值）
+    # default_trend = "sideways"
+    #
+    # for code in required_contracts:
+    #     # 构造显示文本
+    #     display_text = f"{code}-{default_trend}-必备品种"
+    #
+    #     # 如果已经存在，就不重复添加
+    #     if display_text not in choices:
+    #         choices.append(display_text)
+    #         code_map[display_text] = (code, default_trend)
     # ==========================================================================
 
     def show_scroll_choicebox(title, msg, choices) -> str | None:
@@ -266,7 +267,7 @@ def select_future():
 
 
 
-def set_stop_loss():
+def set_stop_loss():  # 窗口止损止盈设置
     win = tk.Tk()
     win.title("设置止盈止损")
     win.geometry("260x130")
@@ -322,7 +323,6 @@ def set_stop_loss():
     win.focus_force()
     e1.focus_set()
     e1.select_range(0, tk.END)
-
     win.mainloop()
 
 
@@ -383,9 +383,14 @@ if __name__ == "__main__":
     monitor_thread = threading.Thread(target=run_monitor, name="MonitorThread", daemon=True)
     reget_open_price_thread = threading.Thread(target=reget_open_price, name="ReGetOpenPriceThread", daemon=True)
     price_thread.start()
+    print_context("30秒后开始检索价格数据下单！")
     order_thread.start()
-    monitor_thread.start()
-    print_context(f"✅ 所有量化交易线程启动成功 >>>\n获取期货品种即时行情线程-collect_current_price(PriceThread)"
+    if shared_data.pre_profit == 0 and shared_data.pre_loss == 0:
+        print_context("用户没有手动设置固定止损止盈值，程序没有启动自动止损止盈监控进程！其他线程已开启：\n"
+                      "获取期货品种即时行情线程-collect_current_price(PriceThread)\n订单线程-trade.order(OrderThread)")
+    else:
+        monitor_thread.start()
+        print_context(f"✅ 所有量化交易线程启动成功 >>>\n获取期货品种即时行情线程-collect_current_price(PriceThread)"
                   f"\n订单线程-trade.order(OrderThread)\n自动交易监控线程-monitor.monitor(MonitorThread)")
     sleep(5)
     reget_open_price_thread.start()

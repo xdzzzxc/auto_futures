@@ -22,9 +22,9 @@ futures_info = {
     'sn': {'exchange': '上期所', 'name': '沪锡', 'ext': 'SHF', 'margin': 0.10, 'leverage': 10.0, 'commission_rate': 0.00005, 'night_trading': True, 'min_price_change': 10, 'one_tick_profit': 100},
     'rb': {'exchange': '上期所', 'name': '螺纹钢', 'ext': 'SHF', 'margin': 0.09, 'leverage': 11.11, 'commission_rate': 0.0001, 'night_trading': True, 'min_price_change': 1, 'one_tick_profit': 10},
     'hc': {'exchange': '上期所', 'name': '热卷', 'ext': 'SHF', 'margin': 0.09, 'leverage': 11.11, 'commission_rate': 0.0001, 'night_trading': True, 'min_price_change': 1, 'one_tick_profit': 10},
-    'bu': {'exchange': '上期所', 'name': '沥青', 'ext': 'SHF', 'margin': 0.10, 'leverage': 10.0, 'commission_rate': 0.0001, 'night_trading': True, 'min_price_change': 1, 'one_tick_profit': 10},
+    'bu': {'exchange': '上期所', 'name': '沥青', 'ext': 'SHF', 'margin': 0.10, 'leverage': 10.0, 'commission_rate': 0.0025, 'night_trading': True, 'min_price_change': 1, 'one_tick_profit': 10},
     'ru': {'exchange': '上期所', 'name': '天然橡胶', 'ext': 'SHF', 'margin': 0.10, 'leverage': 10.0, 'commission_rate': 0.0001, 'night_trading': True, 'min_price_change': 5, 'one_tick_profit': 25},
-    'fu': {'exchange': '上期所', 'name': '燃料油', 'ext': 'SHF', 'margin': 0.10, 'leverage': 10.0, 'commission_rate': 0.0001, 'night_trading': True, 'min_price_change': 1, 'one_tick_profit': 10},
+    'fu': {'exchange': '上期所', 'name': '燃料油', 'ext': 'SHF', 'margin': 0.10, 'leverage': 10.0, 'commission_rate': 0.0025, 'night_trading': True, 'min_price_change': 1, 'one_tick_profit': 10},
     'sp': {'exchange': '上期所', 'name': '纸浆', 'ext': 'SHF', 'margin': 0.10, 'leverage': 10.0, 'commission_rate': 0.0001, 'night_trading': True, 'min_price_change': 2, 'one_tick_profit': 20},
     'ss': {'exchange': '上期所', 'name': '不锈钢', 'ext': 'SHF', 'margin': 0.09, 'leverage': 11.11, 'commission': 2, 'night_trading': True, 'min_price_change': 5, 'one_tick_profit': 25},
 
@@ -46,11 +46,11 @@ futures_info = {
 
     # ===================== 大商所（DCE） =====================
     'lh': {'exchange': '大商所', 'name': '生猪', 'ext': 'DCE', 'margin': 0.07, 'leverage': 14.29, 'commission': 1.5, 'night_trading': False, 'min_price_change': 1, 'one_tick_profit': 10},
-    'jd': {'exchange': '大商所', 'name': '鸡蛋', 'ext': 'DCE', 'margin': 0.07, 'leverage': 14.29, 'commission': 1.5, 'night_trading': False, 'min_price_change': 1, 'one_tick_profit': 10},
+    'jd': {'exchange': '大商所', 'name': '鸡蛋', 'ext': 'DCE', 'margin': 0.07, 'leverage': 14.29, 'commission': 0.0075, 'night_trading': False, 'min_price_change': 1, 'one_tick_profit': 10},
     'm': {'exchange': '大商所', 'name': '豆粕', 'ext': 'DCE', 'margin': 0.07, 'leverage': 14.29, 'commission': 7.5, 'night_trading': True, 'min_price_change': 1, 'one_tick_profit': 10},
     'y': {'exchange': '大商所', 'name': '豆油', 'ext': 'DCE', 'margin': 0.08, 'leverage': 12.5, 'commission': 2.5, 'night_trading': True, 'min_price_change': 2, 'one_tick_profit': 10},
     'p': {'exchange': '大商所', 'name': '棕榈油', 'ext': 'DCE', 'margin': 0.08, 'leverage': 12.5, 'commission': 2.5, 'night_trading': True, 'min_price_change': 2, 'one_tick_profit': 10},
-    'c': {'exchange': '大商所', 'name': '玉米', 'ext': 'DCE', 'margin': 6, 'leverage': 20.0, 'commission': 1.2, 'night_trading': True, 'min_price_change': 1, 'one_tick_profit': 10},
+    'c': {'exchange': '大商所', 'name': '玉米', 'ext': 'DCE', 'margin': 0.08, 'leverage': 20.0, 'commission': 6, 'night_trading': True, 'min_price_change': 1, 'one_tick_profit': 10},
     'i': {'exchange': '大商所', 'name': '铁矿石', 'ext': 'DCE', 'margin': 0.12, 'leverage': 8.33, 'commission_rate': 0.0001, 'night_trading': True, 'min_price_change': 0.5, 'one_tick_profit': 50},
     'j': {'exchange': '大商所', 'name': '焦炭', 'ext': 'DCE', 'margin': 0.20, 'leverage': 5.0, 'commission_rate': 0.0001, 'night_trading': True, 'min_price_change': 0.5, 'one_tick_profit': 50},
     'jm': {'exchange': '大商所', 'name': '焦煤', 'ext': 'DCE', 'margin': 0.15, 'leverage': 6.67, 'commission_rate': 0.0001, 'night_trading': True, 'min_price_change': 0.5, 'one_tick_profit': 30},
@@ -156,8 +156,22 @@ select_future_dict = {
     "nr": ["20号胶", 5800, "上能源", "INE"]
 }
 
+# trans_map ={
+#     'exchange': "交易所",
+#     'code': "英文名称",
+#     'name': "中文名称",
+# }
+#
+# def rename_dict_keys(src_dict, mapping=None):
+#     if mapping is None:
+#         mapping = trans_map
+#     new_dict = {}
+#     for old_key, val in src_dict.items():
+#         new_key = mapping.get(old_key, old_key)
+#         new_dict[new_key] = val
+#     return new_dict
 
-def get_future_info(symbol: str) -> Dict[str, Any] | None:
+def get_future_info(symbol: str, trade_price=0) -> Dict[str, Any] | None:
     symbol = symbol.strip().lower()
     code = ''.join([c for c in symbol if c.isalpha()])
     info_dict: Dict[str, Any] = {"ts_code": symbol, "code": code}
@@ -167,8 +181,14 @@ def get_future_info(symbol: str) -> Dict[str, Any] | None:
     except KeyError:
         return None
     info_dict.update(d)
+
+    # info_dict["保证金"] = round(trade_price * info_dict["margin"], 2)
+    if "commission" in info_dict:
+        info_dict["fee"] = round(info_dict["commission"], 2)
+    else:
+        info_dict["fee"] = round(trade_price * info_dict["commission_rate"], 2)
     return info_dict
 
 
 if __name__ == "__main__":
-    print(get_future_info("c2609"))
+    print(get_future_info("fu3649"))

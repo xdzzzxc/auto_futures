@@ -57,23 +57,34 @@ class POINT(ctypes.Structure):
     _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
 pt = POINT()
 
+
 def restore_system_power():
     kernel32.SetThreadExecutionState(ES_CONTINUOUS)
-atexit.register(restore_system_power)
+
+
+# atexit不再依赖线程绑定的电源调用，注释掉
+# atexit.register(restore_system_power)
+
 
 def keep_system_active():
+    """维持系统不休眠、不关闭显示器，放在循环内反复调用，规避线程销毁失效"""
     kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED)
 
+
 def prevent_screensaver():
-    """防屏保微动鼠标"""
+    """防屏保微动鼠标；注意：调用前必须判断 not shared_data.ui_busy"""
     with shared_data.mouse_lock:
         user32.GetCursorPos(ctypes.byref(pt))
-        dx = random.randint(-5, 5)
-        dy = random.randint(-5, 5)
-        user32.SetCursorPos(pt.x + dx, pt.y + dy)
+        dx = random.randint(-4, 4)
+        dy = random.randint(-4, 4)
+        new_x = pt.x + dx
+        new_y = pt.y + dy
+        user32.SetCursorPos(new_x, new_y)
+        sleep(0.02)
         user32.SetCursorPos(pt.x, pt.y)
 
-def is_target_popup(hwnd):
+
+def is_target_popup(hwnd: int) -> bool:
     """目标弹窗判定（适配x=1600,y=1000基准，百分比兼容所有分辨率）
     全部满足才关闭：
     1. 窗口高度 < 屏幕总高度50%
@@ -95,6 +106,7 @@ def is_target_popup(hwnd):
     cond4 = rect.left > screen_w * 0.8333
     return cond1 and cond2 and cond3 and cond4
 
+
 def close_only_target_popup():
     """仅关闭符合尺寸位置的右下角弹窗，不再关闭其他非白名单窗口"""
     def enum_callback(hwnd, _):
@@ -103,7 +115,6 @@ def close_only_target_popup():
         if not is_target_popup(hwnd):
             return True
 
-        # 匹配目标弹窗，直接关闭，无视进程白名单
         win_title = win32gui.GetWindowText(hwnd).strip()
         _, pid = win32process.GetWindowThreadProcessId(hwnd)
         proc_name = "未知进程"
@@ -113,39 +124,34 @@ def close_only_target_popup():
             pass
 
         try:
+            # 优先优雅关闭
             win32gui.PostMessage(hwnd, 0x0010, 0, 0)
-            win32gui.DestroyWindow(hwnd)
+            sleep(0.05)
+            # 如果窗口还存在，再强制销毁
+            if win32gui.IsWindow(hwnd):
+                win32gui.DestroyWindow(hwnd)
             print(f"【遮挡期货控件弹窗已关闭】进程:{proc_name} | 标题:{win_title if win_title else '无'}")
         except pywintypes.error as e:
-            # 仅忽略句柄失效、权限不足
             if e.winerror in (2, 5):
                 print(f"【弹窗权限不足/已消失】进程:{proc_name} | 标题:{win_title if win_title else '无'}")
             else:
                 raise
         return True
+
     win32gui.EnumWindows(enum_callback, 0)
+
 
 def kill_blacklist_process():
     """查杀黑名单进程，增加去重打印，解决sesvcr.exe刷屏问题"""
     killed_names = set()
     for proc in psutil.process_iter(["pid", "name"]):
         try:
-            pid = proc.info["pid"]
             p_name = proc.info["name"].lower()
             if p_name not in KILL_PROC_BLACKLIST:
                 continue
-            # 去重：同一个进程名本轮只打印一次日志
-            first_print = p_name not in killed_names
-
-            win_title = ""
-            def enum_cb(h, _):
-                nonlocal win_title
-                if win32gui.IsWindowVisible(h):
-                    _, wp = win32process.GetWindowThreadProcessId(h)
-                    if wp == pid:
-                        win_title = win32gui.GetWindowText(h).strip()
-                return True
-            win32gui.EnumWindows(enum_cb, 0)
+            pid = proc.info["pid"]
+            if p_name in killed_names:
+                continue
 
             p = psutil.Process(pid)
             p.terminate()
@@ -153,35 +159,52 @@ def kill_blacklist_process():
                 p.wait(timeout=1.2)
             except psutil.TimeoutExpired:
                 p.kill()
+
             killed_names.add(p_name)
-            if first_print:
-                print(f"\r后台查杀黑名单进程 | 进程:{p_name}", flush=True, end="")
-                sleep(1)
-                print(f"\r{' ' * 100}", flush=True, end="\n")
+            print(f"\r后台查杀黑名单进程 | 进程:{p_name}", flush=True, end="")
+            sleep(0.2)
+            print(f"\r{' ' * 80}", flush=True, end="\n")
+
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
         except Exception:
             continue
 
+
 last_mouse = datetime.now()
+MOUSE_INTERVAL = 16.5  # 鼠标微动间隔秒
+
 def main_daemon():
     global last_mouse
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     print(f"===== 守护程序启动[{now}] 功能：防屏保+清除遮挡期货控件弹窗 =====")
-    keep_system_active()
+
     while True:
-        # 18秒一次鼠标微动防屏保息屏
-        if (datetime.now() - last_mouse).total_seconds() >= 18:
-            prevent_screensaver()
-            last_mouse = datetime.now()
-        # 只扫描关闭遮挡期货窗口的目标弹窗
-        close_only_target_popup()
-        # 查杀壁纸/广告后台进程（去重打印不刷屏）
-        kill_blacklist_process()
-        sleep(random.randint(5, 10))
+        try:
+            # 循环内刷新电源抑制，避免线程绑定失效
+            keep_system_active()
+
+            # 鼠标微动：UI忙时直接跳过，不碰鼠标，保护pywinauto右键菜单
+            delta = (datetime.now() - last_mouse).total_seconds()
+            if delta >= MOUSE_INTERVAL:
+                if not getattr(shared_data, "ui_busy", False):
+                    prevent_screensaver()
+                last_mouse = datetime.now()
+
+            # 扫描关闭目标弹窗
+            close_only_target_popup()
+
+            # 查杀黑名单壁纸广告进程
+            kill_blacklist_process()
+
+            sleep(random.randint(5, 10))
+
+        except Exception as e:
+            # 守护线程绝不崩溃，打印异常继续循环
+            err_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            print(f"[守护daemon异常] {err_time} | error:{str(e)}")
+            sleep(2)
+
 
 if __name__ == "__main__":
-    # 管理员运行
     main_daemon()
-    kill_blacklist_process()
-    # close_only_target_popup()
