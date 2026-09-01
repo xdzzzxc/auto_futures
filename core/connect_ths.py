@@ -415,12 +415,14 @@ def set_loss_profit(param: dict = None):
         k += 1
         try:
             tmp_ctrl = ths_window.child_window(control_type="Text", title=fut_code)
+            # 修复：额外校验可见、可用状态，必须同时满足
             tmp_ctrl.wait("visible", timeout=1)
-            fut_code_ctrl = tmp_ctrl
+            if tmp_ctrl.is_visible() and tmp_ctrl.is_enabled():
+                fut_code_ctrl = tmp_ctrl
         except Exception:
             fut_code_ctrl = None
         if fut_code_ctrl is None:
-            sleep(0.2)
+            sleep(0.5)
 
     if fut_code_ctrl is None:
         print_context(f"[{fut_code}] 找不到持仓合约控件，终止设置")
@@ -431,6 +433,11 @@ def set_loss_profit(param: dict = None):
     for drill_type, price in todo_list:
         print(f"\n---开始处理：{drill_type} ---")
         try:
+            # 右键前再次校验控件可见可用
+            if not (fut_code_ctrl.is_visible() and fut_code_ctrl.is_enabled()):
+                print(f"[{fut_code}] 合约控件当前不可见/不可用，跳过本条设置")
+                continue
+
             rect = fut_code_ctrl.rectangle()
             click_x = (rect.left + rect.right) // 2
             click_y = (rect.top + rect.bottom) // 2
@@ -449,7 +456,7 @@ def set_loss_profit(param: dict = None):
 
             menu_rect = stop_loss_profit_item.rectangle()
             stop_loss_profit_item.click_input()
-            print(f"止损止盈菜单坐标：{menu_rect}")
+            # print(f"止损止盈菜单坐标：{menu_rect}")
             mouse.click(button="left", coords=(menu_rect.right + 50, menu_rect.top + 20))
             sleep(0.6)
 
@@ -458,7 +465,6 @@ def set_loss_profit(param: dict = None):
             create_win.wait("visible", timeout=3)
 
             _setup_one_item(create_win, drill_type, price)
-
         except Exception as e:
             print(f"[{fut_code} {drill_type}] 设置失败，异常：{str(e)}")
             try:
@@ -467,16 +473,13 @@ def set_loss_profit(param: dict = None):
                 pass
             continue
 
+
     # 全部处理完，兜底清理
     try:
         if 'create_win' in locals() and create_win.exists():
             create_win.type_keys("{ESC}")
     except Exception:
         pass
-
-
-
-
 
 
 if __name__ == '__main__':

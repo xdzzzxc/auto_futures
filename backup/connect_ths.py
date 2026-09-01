@@ -1,263 +1,482 @@
+from datetime import datetime
 from pywinauto import Application, mouse
 from time import sleep
+from public.close_ad_window import close_ad_windows
+
 import random
 import os
-import re
+from pywinauto.controls.uiawrapper import UIAWrapper
+from pywinauto.findwindows import ElementNotFoundError
+# from pywinauto.timings import TimeoutError, wait_until
 import psutil
-import ctypes
-import sys
-import pywinauto.remote_memory_block
+from public.print_context import print_context
 from public import shared_data
-
-# ===================== 修补pywinauto底层，解决内存访问报错 =====================
-original_init = pywinauto.remote_memory_block.RemoteMemoryBlock.__init__
-
-
-def patched_init(self, element_info, size=4096):
-    original_init(self, element_info, size)
-    if self.mem_address is None:
-        self.mem_address = 0
-
-
-original_check_guard = pywinauto.remote_memory_block.RemoteMemoryBlock.CheckGuardSignature
-
-
-def patched_check_guard(self):
-    if self.mem_address is None:
-        return
-    original_check_guard(self)
-
-
-pywinauto.remote_memory_block.RemoteMemoryBlock.__init__ = patched_init
-pywinauto.remote_memory_block.RemoteMemoryBlock.CheckGuardSignature = patched_check_guard
-
-# ===================== 导入逻辑 =====================
-
-try:
-    from .close_ad_window import close_ad_windows
-except ImportError:
-    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-    from close_ad_window import close_ad_windows
-
-# ===================== 全局变量 =====================
+from public.shared_data import simulate_input
+from pywinauto import mouse
+from typing import cast
 ths_path = r"C:\同花顺期货通\bin\hexinlauncher.exe"
-ctrl_rectangle_dict = {'品种': (214, 796, 286, 813), '手数一': (321, 793, 413, 817),
-                       '即时价位': (242, 836, 277, 853), '条件单': (272, 988, 311, 1007),
-                       '合约信息': (213, 945, 445, 962), '用户名': (18, 721, 168, 738),
-                       '买入': (731, 441, 759, 461), '卖出': (803, 441, 831, 461),
-                       '止损价': (954, 503, 1054, 527), '止盈价': (1156, 503, 1256, 527),
-                       '确定开仓': (1147, 667, 1173, 686), '手数二': (1015, 439, 1115, 463),
-                       '期货户': (1663, 1019, 1697, 1035), '用户类型': (862, 502, 1045, 522),
-                       '模拟交易': (847, 538, 1077, 555), '期货用户': (847, 563, 1047, 580),
-                       '期货密码': (862, 582, 1046, 602), '登录': (840, 647, 1080, 681),
-                       '平仓': (458, 863, 490, 884), '条件单品种': (669, 341, 779, 360),
-                       '条件单限价': (812, 412, 902, 436)}
 
-user_name_dict = {0: "模拟交易-1811889418", 1: "期货用户-国泰君安_CTP-85415809"}
-ctrl_mapping = {}
+login_ctrl = {'期货户': (1663, 1019, 1697, 1035), '选择用户': (862, 502, 1045, 522),
+              '模拟用户': (847, 538, 1077, 555), '国泰君安_CTP': (847, 563, 1047, 580),
+              '期货密码': (862, 582, 1046, 602), '登录': (840, 647, 1080, 681),
+              }
+user_name_dict = {0: "模拟用户", 1: "期货用户"}
+subwindow = None
 
+ths_common_ctrls_dict = {'用户名': (18, 721, 155, 738), '权益': (165, 719, 256, 739),
+                         '可用资金': (271, 719, 390, 739), '商品锁': (287, 797, 303, 813),
+                         '期货代码': (214, 796, 286, 813), '即时价格': (245, 836, 281, 853),
+                         '平仓': (458, 863, 490, 884), '盈亏': (213, 923, 454, 962),
+                         '保证金': (213, 945, 426, 962), '条件单': (272, 988, 311, 1007),
+                         '买多': (243, 863, 275, 884), '卖空': (350, 863, 382, 884)}
 
-# ===================== 管理员权限检查 =====================
-def check_admin():
-    try:
-        is_admin = ctypes.windll.shell32.IsUserAnAdmin()
-    except:
-        is_admin = False
-    if not is_admin:
-        print("⚠️ 正在提权为管理员权限...")
-        ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, __file__, None, 1)
-        sys.exit(0)
+# 新增工具函数
+def is_ths_process_exist() -> bool:
+    """只识别主行情happ.exe，过滤hexinlauncher残留启动器"""
+    for proc in psutil.process_iter(attrs=["name"]):
+        name = proc.info.get("name", "")
+        if name and name.lower() == "happ.exe":
+            return True
+    return False
 
-
-# ===================== 核心：纯pywinauto窗口定位（无任何额外依赖） =====================
-def get_ths_window_simple():
-    """纯pywinauto定位，绕开所有系统API依赖"""
-    # 步骤1：找同花顺进程PID
-    ths_pids = []
-    for proc in psutil.process_iter(['name', 'pid']):
-        try:
-            name = proc.info.get('name', '').lower()
-            if 'happ' in name or 'hexinlauncher' in name:
-                ths_pids.append(proc.info['pid'])
-        except:
-            continue
-
-    # 步骤2：逐个PID尝试连接
-    for pid in ths_pids:
-        try:
-            app = Application(backend="win32").connect(process=pid, timeout=8)
-            # 遍历该进程下所有窗口，不判断visible，直接取第一个标题含同花顺的
-            for win in app.windows():
-                win_text = win.window_text().lower()
-                if "同花顺" in win_text and "期货通" in win_text:
-                    # 强制激活窗口（不检测状态）
-                    win.set_focus()
-                    win.maximize()
-                    return win
-        except:
-            continue
-
-    # 步骤3：终极兜底-直接启动并连接
-    print("⚠️ 未找到现有窗口，尝试重新启动同花顺...")
-    if os.path.exists(ths_path):
-        app = Application(backend="win32").start(ths_path)
-        sleep(20)
-        # 启动后再次尝试连接
-        for win in app.windows():
-            win_text = win.window_text().lower()
-            if "同花顺" in win_text and "期货通" in win_text:
-                win.set_focus()
-                win.maximize()
-                return win
-
+def get_happ_pid():
+    for proc in psutil.process_iter(attrs=["name", "pid"]):
+        name = proc.info.get("name", "")
+        if name and name.lower() == "happ.exe":
+            return proc.info["pid"]
     return None
 
+def is_win_valid(win) -> bool:
+    """校验窗口有效性，失效清空全局缓存"""
+    try:
+        return win.exists(timeout=0.3)
+    except Exception:
+        shared_data.trade_window = None
+        if hasattr(shared_data, "ths_common_control"):
+            shared_data.ths_common_control = {}
+        return False
 
-# ===================== 原有函数修复 =====================
+def is_around(checked_value, target_value, error_range=4):
+    return (target_value - error_range) <= checked_value <= (target_value + error_range)
+
+
 def start_ths():
-    print("📌 正在启动同花顺期货通...")
-    if os.path.exists(ths_path):
-        Application(backend="win32").start(ths_path)
-        sleep(random.uniform(15, 20))
-    else:
-        print(f"❌ 同花顺路径不存在：{ths_path}")
-        sys.exit(1)
+    """启动同花顺并自动完成全套登录，全程自动化无需人工操作"""
+    try_counts = 0
+    max_try_counts = 5
+    Application(backend="uia").start(ths_path)
+    print(f"已启动同花顺期货通，等待窗口加载 ------ [{datetime.now().strftime('%H:%M:%S')}]")
 
-
-def check_ths_status(keyword='happ'):
-    flag = False
-    print(f'程序正在检查[{keyword}]进程的运行新动态······')
-
-    # 遍历进程
-    for proc in psutil.process_iter(['name', 'pid', 'exe']):
+    while True:
+        try_counts += 1
+        print(f"\r第{try_counts}/{max_try_counts}次尝试连接窗口", flush=True, end="")
+        if try_counts > max_try_counts:
+            raise RuntimeError(f"连接同花顺窗口超时，已重试{max_try_counts}次，请检查程序是否正常启动")
         try:
-            process_info = proc.info
-            name = process_info.get('name', '')
-            exe = process_info.get('exe', '')
-
-            if (name and keyword in name) or (exe and keyword in exe):
-                flag = True
+            app = Application(backend="uia").connect(title_re=r".*同花顺期货通.*", timeout=10)
+            ths_window = app.window(title_re=r".*同花顺期货通.*", control_type="Window")
+            if ths_window.exists(timeout=10):
+                shared_data.trade_window = ths_window
+                ths_window.maximize()
+                ths_window.set_focus()
+                print(
+                    f"\r第{try_counts}/{max_try_counts}次尝试连接窗口 - 连接成功 [{datetime.now().strftime('%H:%M:%S')}]\n")
                 break
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            continue
+        except Exception as e:
+            print(f"窗口未就绪，等待重试，异常信息：{str(e)}")
+        sleep(1)
+    return ths_window
 
-    print(f'进程[{keyword}]的检查结果：{"正在运行！" if flag else "未发现该进程！"}')
-    return flag
+
+def auto_login(ths_window):
+    """
+    纯登录逻辑，接收已连接好的主窗口
+    无内嵌login函数，所有登录操作平铺写在本函数内
+    软件已启动时，直接调用此函数即可，无需重复启动exe
+    """
+    # global subwindow
+
+    # 定位期货户按钮
+
+    user_type_btn = ths_window.child_window(control_type='Button', title_re='期货户|期货用户')
+    shared_data.login_control.clear()
+    shared_data.login_control['期货户'] = [
+        user_type_btn, user_type_btn.rectangle()]
+
+    if not user_type_btn.is_enabled():
+        restart_ths()
+        ths_window = shared_data.trade_window
+        ths_window.set_focus()
+        ths_window.maximize()
+        user_type_btn = ths_window.child_window(control_type='Button', title='期货户')
+        shared_data.login_control.clear()
+        shared_data.login_control['期货户'] = [user_type_btn, user_type_btn.rectangle()]
+
+    # close_ad_windows()
+    close_ad_windows()  # 功能更强大，替换close_ad_windows()
+    # 唤起登录弹窗
+    shared_data.login_control['期货户'][0].click_input()
+    sleep(2)
+
+    # 等待登录弹窗出现
+    exist_flag = False
+    max_wait = 15
+    wait_cnt = 0
+    # desktop = Desktop(backend="uia")
+    subwindow = None
+    while not exist_flag and wait_cnt < max_wait:
+        close_ad_windows()  # 每次循环都要清理一下广告弹窗
+        try:
+            subwindow = ths_window.child_window(title="同花顺期货通交易", control_type="Window")
+            # subwindow = desktop.window(title_re=r".*同花顺期货通交易.*", control_type="Window", timeout=1)
+            if subwindow.exists(timeout=0):
+                exist_flag = True
+                break
+        except Exception:
+            pass
+        wait_cnt += 1
+        sleep(1)
+    if not exist_flag:
+        raise RuntimeError("等待【同花顺期货通交易】登录窗口超时，未检测到弹窗")
+    shared_data.login_control['登录窗口'] = [subwindow, subwindow.rectangle()]
+
+    # 获取输入框
+    edit_ctrls = ths_window.descendants(control_type='Edit')
+    shared_data.login_control['选择用户'] = [edit_ctrls[0], edit_ctrls[0].rectangle()]
+    shared_data.login_control['期货密码'] = [edit_ctrls[2], edit_ctrls[2].rectangle()]
+
+    # 展开账号下拉列表
+    shared_data.login_control['选择用户'][0].click_input()
+    sleep(random.uniform(0.5, 1))
+
+    # 账号文本控件
+    user_type = subwindow.descendants(control_type='Text')
+    shared_data.login_control['模拟交易'] = [user_type[0], user_type[0].rectangle()]
+    shared_data.login_control['国泰君安'] = [user_type[1], user_type[1].rectangle()]
+    login_btn = subwindow.child_window(title='登录')
+    shared_data.login_control['登录'] = [login_btn, login_btn.rectangle()]
+
+    # 平铺登录操作，不再嵌套内部login函数
+    subwindow.set_focus()
+    if shared_data.user_type == 0:
+        # 模拟账户
+        sleep(random.uniform(0.2, 0.5))
+        shared_data.login_control['模拟交易'][0].click_input()
+        sleep(random.uniform(0.2, 0.5))
+    else:
+        # 实盘国泰君安
+        sleep(random.uniform(0.2, 0.5))
+        shared_data.login_control['国泰君安'][0].click_input()
+        sleep(random.uniform(0.2, 0.5))
+        shared_data.login_control['期货密码'][0].set_text(os.environ.get("trade_password"))
+    # 点击登录
+    shared_data.login_control['登录'][0].click_input()
+
+def restart_ths():
+    try:
+        app = Application(backend="uia").connect(title_re=r".*同花顺期货通.*")
+        app.kill()
+    except Exception:
+        pass
+    print("正在准备重启同花顺期货通应用程序 ······")
+    # 新增冷却，释放10612残留端口，解决ConnectRefused
+    sleep(1)
+    # 清空全局缓存
+    shared_data.trade_window = None
+    if hasattr(shared_data, "ths_common_control"):
+        shared_data.ths_common_control = {}
+    window = start_ths()
+    auto_login(ths_window=window)
+    local_control()
+
+# 主入口 check_ths_status 修复逻辑+补充打印启动状态、登录用户名
+def check_ths_status():
+    status_type = {0: "未启动同花顺软件", 1: "未登录期货用户", 2: "模拟用户", 3: "期货用户（国泰君安）"}
+    # proc_running = is_ths_process_exist()
+    happ_pid = get_happ_pid()
+    # 先打印基础状态，登录账户后置获取，避免临时窗口识别失败
+    print_context(f"正在检查[同花顺期货通]运行状态：{status_type}")
+    print_context(f"软件进程启动状态：{'已启动' if happ_pid else '未启动'}")
+
+    # 分支1：无同花顺进程，自动启动+自动登录
+    if not happ_pid:
+        print_context("检测：无同花顺进程，自动启动并完成登录流程")
+        window = start_ths()
+        auto_login(ths_window=window)
+        local_control()
+        return 0
+    # 当判断同花顺软件已启动后的操作：只启动软件未登录用户；启动软件登录了用户。
+    if happ_pid:
+        # app = Application(backend="uia").connect(title_re=r".*同花顺期货通.*", timeout=10)
+        app = Application(backend="uia").connect(process=happ_pid, timeout=5)
+        # ths_window = app.window(title_re=r".*同花顺期货通.*", control_type="Window")
+        ths_window = app.window(control_type="Window", visible_only=False)
+        close_ad_windows()  # 关闭弹窗确保启动顺利进行
+        ths_window.set_focus()
+        ths_window.maximize()
+        qhh_btn = ths_window.child_window(control_type='Button', title_re='期货户|期货用户')
+        qhh_btn_enabled = qhh_btn.is_enabled()
+        if qhh_btn_enabled:
+            print(f"同花顺期货交易软件已正常启动，等待用户登录 ........ \n")
+            auto_login(ths_window=ths_window)
+            local_control()
+            return 1
+        if not qhh_btn_enabled:
+            user_type = 0
+            user_ctrl = ths_window.child_window(control_type="Button", title_re=r"模拟交易.*|国泰君安.*")
+            user_ctrl_text = user_ctrl.window_text()
+            if user_ctrl_text.startswith("国泰"):
+                user_type = 1
+            if user_type == shared_data.user_type:
+                print_context(f"connect_ths.check_ths_status:已登录用户：{'模拟用户' if user_type==0 else '期货用户'}\n")
+                local_control()
+                return f"指定用户已登录：{'模拟用户' if user_type==0 else '期货用户'}！"
+            else:
+                print_context(f"正在重启同花顺期货通交易软件并切换用户：{'模拟用户' if user_type==0 else '期货用户'}\n")
+                restart_ths()
+                return f"正在重启并切换用户：{'模拟用户' if user_type==0 else '期货用户'}"
 
 
 def click_position(rect_tuple):
-    """稳定的坐标点击（增加随机延迟，提高兼容性）"""
-    x = rect_tuple[0] + (rect_tuple[2] - rect_tuple[0]) // 2
-    y = rect_tuple[1] + (rect_tuple[3] - rect_tuple[1]) // 2
-    # 移动鼠标到目标位置（增加随机延迟）
-    mouse.move(coords=(x, y))
-    sleep(random.uniform(0.3, 0.7))
-    # 执行点击（双击兜底，防止单次点击无效）
-    mouse.click(button='left', coords=(x, y))
-    sleep(random.uniform(0.5, 1.0))
+    x = rect_tuple[0] + (rect_tuple[2] - rect_tuple[0])//2
+    y = rect_tuple[1] + (rect_tuple[3] - rect_tuple[1])//2
+    return mouse.click(button='left', coords=(x, y))
 
+def local_control():
+    missing_ctrls = 0  # 用来在定位完控件后统计检测未定位到的控件数量
+    try_max = 5
+    try_count = 0
+    local_control_count = len(ths_common_ctrls_dict)
+    ths_window = None
+    none_count = 0
+    ctrl_mapping = {}
+    for key in ths_common_ctrls_dict.keys():
+        ctrl_mapping[key] = None
 
-def run_ths():
-    # 1. 检查管理员权限
-    check_admin()
-
-    # 2. 获取用户信息
-    user_type = shared_data.user_type
-    user_name = user_name_dict[user_type]
-
-    # 3. 检查进程状态（仅日志，不影响后续操作）
-    check_ths_status()
-
-    # 4. 纯pywinauto获取窗口（核心修复：无任何系统API依赖）
-    print("🔍 正在定位同花顺期货通窗口...")
-    ths_window = get_ths_window_simple()
-    if not ths_window:
-        print("❌ 无法获取同花顺期货通窗口，请手动确认软件已启动！")
-        sys.exit(1)
-    print("✅ 窗口定位成功！")
-
-    # 5. 强制窗口操作（不检测任何状态）
-    try:
+    if not shared_data.trade_window or not is_win_valid(shared_data.trade_window):
+        app = Application(backend="uia").connect(title_re=r".*同花顺期货通.*", timeout=3)
+        ths_window = app.window(title_re=r".*同花顺期货通.*")
+        ths_window.wait('visible', timeout=2)
+        shared_data.trade_window = ths_window
         ths_window.set_focus()
-    except:
-        print("⚠️ 窗口聚焦失败，继续执行后续操作...")
-    try:
         ths_window.maximize()
-    except:
-        print("⚠️ 窗口最大化失败，继续执行后续操作...")
-    sleep(3)  # 给窗口足够的响应时间
-
-    # 6. 跳过控件检测，直接执行登录流程（全程坐标操作）
-    print("🔑 执行登录流程（全程坐标操作）...")
-    close_ad_windows()
-    sleep(random.uniform(1.0, 2.0))
-
-    # 步骤1：点击期货账户按钮
-    click_position(ctrl_rectangle_dict['期货户'])
-    sleep(random.uniform(1.5, 3.0))
-
-    # 步骤2：选择用户类型
-    click_position(ctrl_rectangle_dict['用户类型'])
-    sleep(random.uniform(1.0, 2.0))
-    click_position(ctrl_rectangle_dict[user_name[:4]])
-    sleep(random.uniform(1.0, 2.0))
-
-    # 步骤3：输入密码并登录
-    if user_type == 1:
-        # 期货用户：输入密码
-        click_position(ctrl_rectangle_dict['期货密码'])
-        sleep(random.uniform(2.0, 4.0))
-        from pywinauto.keyboard import send_keys
-        # 读取密码（优先环境变量，无则提示）
-        trade_pwd = os.environ.get('trade_password')
-        if not trade_pwd:
-            print("⚠️ 未设置trade_password环境变量，请手动输入密码！")
-            sleep(5)
-        else:
-            send_keys(trade_pwd)
-            sleep(random.uniform(1.0, 2.0))
-            send_keys('{ENTER}')
     else:
-        # 模拟交易：直接点击登录
-        click_position(ctrl_rectangle_dict['登录'])
-        sleep(random.uniform(1.0, 2.0))
+        ths_window = shared_data.trade_window
 
-    # 7. 完成操作，保存窗口
-    shared_data.trade_window = ths_window
-    close_ad_windows()
-    print(f'✅ [{user_name_dict[user_type]}] 登录流程执行完成！')
-
-
-def local_ths_common_control():
-    flag = check_ths_status()
-    if not flag:
-        print(f"程序没有加载同花顺期货软件，交易窗口未成功启动！\n窗口信息：{shared_data.trade_window}")
-        sys.exit()
-
-    text_controls = []
-    try:
-        trade_window = shared_data.trade_window
-        # 仅遍历可见控件，跳过异常
-        for ctrl in trade_window.children():
+    while try_count < try_max:
+        all_ctrls = ths_window.descendants()
+        for num, ctrl in enumerate(all_ctrls):
             try:
-                if not ctrl.is_visible() or not ctrl.window_text():
-                    continue
-                if "权益" in ctrl.window_text():
-                    text_controls.append(ctrl)
-            except:
+                rect = ctrl.rectangle()
+                win_txt = ctrl.window_text()
+                l, t, r, b = rect.left, rect.top, rect.right, rect.bottom
+                rect_tuple = (l, t, r, b)
+                if is_around(ths_common_ctrls_dict["条件单"][0], l) and is_around(ths_common_ctrls_dict["条件单"][1], t):
+                    if ctrl_mapping['条件单'] is None:
+                        ctrl_mapping['条件单'] = [ctrl, rect_tuple, win_txt]
+                if all(key in win_txt for key in ["保证金", "每手"]):
+                    if ctrl_mapping['保证金'] is None:
+                        ctrl_mapping['保证金'] = [ctrl, rect_tuple, win_txt]
+                if is_around(ths_common_ctrls_dict["平仓"][0], l) and is_around(ths_common_ctrls_dict["平仓"][1], t):
+                    if ctrl_mapping['平仓'] is None:
+                        ctrl_mapping['平仓'] = [ctrl, rect_tuple, win_txt]
+                if any(key in win_txt for key in ["模拟交易", "国泰君安"]):
+                    if ctrl_mapping['用户名'] is None:
+                        ctrl_mapping['用户名'] = [ctrl, rect_tuple, win_txt]
+                if "权益" in win_txt:
+                    if ctrl_mapping['权益'] is None:
+                        ctrl_mapping['权益'] = [ctrl, rect_tuple, win_txt]
+                if "可用资金" in win_txt:
+                    if ctrl_mapping['可用资金'] is None:
+                        ctrl_mapping['可用资金'] = [ctrl, rect_tuple, win_txt]
+                if is_around(ths_common_ctrls_dict["买多"][0], l) and is_around(ths_common_ctrls_dict["买多"][1], t):
+                    if ctrl_mapping['买多'] is None:
+                        ctrl_mapping['买多'] = [ctrl, rect_tuple, win_txt]
+                if is_around(ths_common_ctrls_dict["卖空"][0], l) and is_around(ths_common_ctrls_dict["卖空"][1], t):
+                    if ctrl_mapping['卖空'] is None:
+                        ctrl_mapping['卖空'] = [ctrl, rect_tuple, win_txt]
+                if is_around(ths_common_ctrls_dict["商品锁"][0], l) and is_around(ths_common_ctrls_dict["商品锁"][1], t):
+                    if ctrl_mapping['商品锁'] is None:
+                        ctrl_mapping['商品锁'] = [ctrl, rect_tuple, win_txt]
+                if is_around(ths_common_ctrls_dict["盈亏"][0], l) and is_around(ths_common_ctrls_dict["盈亏"][1], t):
+                    if ctrl_mapping['盈亏'] is None:
+                        ctrl_mapping['盈亏'] = [ctrl, rect_tuple, win_txt]
+                if is_around(ths_common_ctrls_dict["期货代码"][0], l) and is_around(ths_common_ctrls_dict["期货代码"][1], t):
+                    if ctrl_mapping['期货代码'] is None:
+                        child_edits = ctrl.children(control_type="Edit")
+                        if len(child_edits) > 0:
+                            real_edit = child_edits[0]
+                            ctrl_mapping['期货代码'] = [real_edit, rect_tuple, real_edit.window_text()]
+                if is_around(ths_common_ctrls_dict["即时价格"][0], l, error_range=15) and is_around(ths_common_ctrls_dict["即时价格"][1], t):
+                    if ctrl_mapping['即时价格'] is None:
+                        ctrl_mapping['即时价格'] = [ctrl, rect_tuple, win_txt]
+            except Exception:
                 continue
-    except:
+
+        # none_count = sum(1 for v in ctrl_mapping.values() if v is None)
+        # if none_count == 0:
+        #     print_context(f"\r >>>>>>>>>>>> 已准确定位到全部所需控件[{local_control_count}] <<<<<<<<<<<<")
+        #     # 需求3：打印全部控件key列表
+        #     ctrl_key_list = list(ctrl_mapping.keys())
+        #     # print(f"全部控件名称列表：{ctrl_key_list}")
+        #     break
+        # else:
+        #     pass
+            # print_context(f"\r正在定位应用所需的控件：{local_control_count - none_count} - {[k for k, v in ctrl_mapping.items() if v is not None]}", flush=True, end="")
+        try_count += 1
+        sleep(0.1)
+    missing_ctrls = [k for k, v in ctrl_mapping.items() if v is None]
+    none_count = len(missing_ctrls)
+    if none_count > 0:
+        print_context(f"未定位到所需全部控件，程序不能继续运行即将自动退出：\n>>> 缺失控件列表[共缺失{none_count}个]:{missing_ctrls}")
+        exit(0)
+    shared_data.ths_common_control = ctrl_mapping
+    # 在期货代码框输入交易品种代码并锁定
+    code_ctrl = shared_data.ths_common_control['期货代码'][0]
+    lock_ctrl = shared_data.ths_common_control["商品锁"][0]
+    window = UIAWrapper(shared_data.trade_window.element_info)
+    ts_code = shared_data.ts_code or "m2609"
+    if code_ctrl.window_text() != ts_code:
+        if code_ctrl.is_enabled():
+            simulate_input(ctrl=code_ctrl, window=window, value=ts_code)  # 模拟输入
+            lock_ctrl.click_input()
+        else:
+            lock_ctrl.click_input()
+            simulate_input(ctrl=code_ctrl, window=window, value=ts_code)
+            lock_ctrl.click_input()
+    else:
+        if code_ctrl.is_enabled():
+            lock_ctrl.click_input()
+    with shared_data.valid_time_lock:
+        shared_data.valid_time = datetime.now()  # 设置时刻交易点
+
+
+def set_loss_profit(param: dict = None):
+    """
+    设置云止损止盈保本单；内部函数封装单条设置逻辑，每条完整重新打开弹窗
+    """
+    if param is None:
+        param = shared_data.loss_profit_param.copy()
+
+    fut_code = shared_data.ts_code or "m2609"
+
+    # 1. 先过滤出真正需要设置的项
+    todo_list = []
+    for drill_type, price in param.items():
+        if price > 0:
+            todo_list.append((drill_type, price))
+        else:
+            print(f"跳过[{fut_code} {drill_type}] 设置！")
+
+    if not todo_list:
+        print(f"[{fut_code}] 没有需要设置的云止损/止盈参数，直接返回")
+        return
+
+    # -------- 内部函数：只负责【弹窗已经打开】的前提下，填写并创建一条条件 --------
+    def _setup_one_item(create_win, drill_type, price):
+        """弹窗已就绪，执行单选填、点击创建"""
+        cloud_ctrl = create_win.child_window(control_type="Text", title=drill_type)
+        cloud_ctrl.wait("visible", timeout=3)
+        cloud_ctrl.click_input()
+
+        edit_ctrl = create_win.descendants(control_type="Edit")[0]
+        sleep(0.5)
+        edit_ctrl.set_text(str(price))
+
+        create_text = create_win.child_window(control_type="Text", title="创建")
+        create_text.wait("visible", timeout=3)
+        create_text.click_input()
+        sleep(0.6)
+        print(f"[{fut_code} {drill_type}] 设置完毕！")
+
+    # -------- 连接窗口 --------
+    ths_window = None
+    app = None
+    if shared_data.trade_window is not None:
+        ths_window = shared_data.trade_window
+        app = ths_window.app
+    else:
+        ths_pid = get_happ_pid()
+        print(f"ths_pid={ths_pid}")
+        app = Application(backend="uia").connect(process=ths_pid, timeout=10)
+        ths_window = app.top_window()
+
+    ths_window.set_focus()
+
+    # 点击【持仓】tab
+    position_text_ctrl = ths_window.child_window(control_type="Text", title="持仓")
+    position_text_ctrl.wait("visible", timeout=3)
+    position_text_ctrl.click_input()
+
+    # 定位合约条目（只定位一次）
+    fut_code_ctrl = None
+    k = 0
+    while fut_code_ctrl is None and k <= 20:
+        k += 1
+        try:
+            tmp_ctrl = ths_window.child_window(control_type="Text", title=fut_code)
+            tmp_ctrl.wait("visible", timeout=1)
+            fut_code_ctrl = tmp_ctrl
+        except Exception:
+            fut_code_ctrl = None
+        if fut_code_ctrl is None:
+            sleep(0.2)
+
+    if fut_code_ctrl is None:
+        print_context(f"[{fut_code}] 找不到持仓合约控件，终止设置")
+        return
+    fut_code_ctrl = cast(UIAWrapper, fut_code_ctrl)
+
+    # ========= 外层for循环，每一条完整：右键→菜单→弹窗→调用内部函数设置 =========
+    for drill_type, price in todo_list:
+        print(f"\n---开始处理：{drill_type} ---")
+        try:
+            rect = fut_code_ctrl.rectangle()
+            click_x = (rect.left + rect.right) // 2
+            click_y = (rect.top + rect.bottom) // 2
+            mouse.move((click_x, click_y))
+            sleep(0.3)
+            mouse.click(button="right", coords=(click_x, click_y))
+
+            sleep(1.4)
+
+            # 在同花顺主窗口ths_window下找菜单项，限定搜索范围，避免多元素冲突
+            stop_loss_profit_item = ths_window.child_window(
+                control_type="MenuItem",
+                title="止损止盈"
+            )
+            stop_loss_profit_item.wait("visible", timeout=4)
+
+            menu_rect = stop_loss_profit_item.rectangle()
+            stop_loss_profit_item.click_input()
+            # print(f"止损止盈菜单坐标：{menu_rect}")
+            mouse.click(button="left", coords=(menu_rect.right + 50, menu_rect.top + 20))
+            sleep(0.6)
+
+            # close_ad_windows()
+            create_win = ths_window.child_window(control_type="Window", title="云止损单")
+            create_win.wait("visible", timeout=3)
+
+            _setup_one_item(create_win, drill_type, price)
+
+        except Exception as e:
+            print(f"[{fut_code} {drill_type}] 设置失败，异常：{str(e)}")
+            try:
+                ths_window.type_keys("{ESC}")
+            except Exception:
+                pass
+            continue
+
+
+    # 全部处理完，兜底清理
+    try:
+        if 'create_win' in locals() and create_win.exists():
+            create_win.type_keys("{ESC}")
+    except Exception:
         pass
 
-    sleep(2)
-    for k, ctrl in enumerate(text_controls):
-        print(f"{k}.{ctrl.window_text()}   {ctrl.rectangle()}")
 
-
-# ===================== 主程序 =====================
 if __name__ == '__main__':
-    # 禁用pywinauto的所有日志（减少干扰）
-    import logging
-    logging.getLogger('pywinauto').setLevel(logging.ERROR)
-    run_ths()
-    local_ths_common_control()
+    # check_ths_status()
+    # local_control()
+    set_loss_profit()

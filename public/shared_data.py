@@ -28,8 +28,8 @@ valid_time_lock = threading.Lock()  # 创建锁
 market_ctx_dict = {}
 
 # 期货品种即时行情价格缓冲区及相关安全配置
-get_price_interval = 5  # 从同花顺窗口读取即时价格的时间间隔，默认为5秒
-k_minutes = 5  # 设置指定时长的最后一根K线的时间
+get_price_interval = 2  # 从同花顺窗口读取即时价格的时间间隔，默认为2秒
+k_minutes = 3  # 设置指定时长的最后一根K线的时间
 current_price_dict = {}  # 即时行情中的期货商品买卖价格
 cur_price_deque = deque(maxlen=20000)
 price_buffer = []  # 缓冲区
@@ -61,10 +61,10 @@ pre_profit = 0.0  # 手动设置固定止盈值
 pre_loss = 0.0  # 手动设置固定止损值
 target_days = 20  # 从tu_share获取ts_code历史行情数据（天数）
 lot_size = 1  # 期货买卖手数，默认值1，不同商品规定必须最少多少手
-direction = "Sideways"  # 如果有专业推荐，直接写买多-Rise、卖空-Fall，否则由历史数据与今日开盘价来确定多空方向
+direction = "rise"  # 如果有专业推荐，直接写买多-Rise、卖空-Fall，否则由历史数据与今日开盘价来确定多空方向
 history_trade_df = None  # 期货品种历史交易原始数据，dataframe格式；
 history_data_analysis = None  # 期货商品历史交易数据，来源于future_data模块
-loss_profit_param = {"云止盈单": 3450, "云止损单": 3120, "云保本单": 0}  # 对应止损止盈设置3450,3120
+loss_profit_param = {"云止盈单": 3338, "云止损单": 3120, "云保本单": 0}  # 对应止损止盈设置3450,3120
 future_quote_dict = {}  # 期货行情 https://push2.eastmoney.com/api/qt/ulist.np/get
 future_info_dict = {}  # 期货资讯行情
 # "交易方向", "交易价", "止损价", "止盈价", "交易前总额", "交易后总额", "利润"
@@ -74,7 +74,7 @@ BIN_NUM = 8  # 配置参数：箱体数量，日内短线推荐8个等宽箱体
 
 total_balance = 0.0  # 账户总金额
 available_balance = 0.0  # 账户可用资金
-quote_list = ["m2609", "c2609", "jd2609"]  # 默认要从东方财富网获取开盘价等信息的期货品种
+quote_list = ["m2611", "c2610", "jd2610", "ma2610"]  # 默认要从东方财富网获取开盘价等信息的期货品种
 
 trade_time_table = [(9, 0, 10, 15), (10, 30, 11, 30), (13, 30, 15, 0), (21, 0, 23, 0)]  # 交易时间表, 最后一个用测试。
 start_trade_date = None  # 期货开始交易时间（下单日期）

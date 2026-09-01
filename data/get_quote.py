@@ -233,7 +233,7 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
 
         data_item = {
             "日期": datetime.now().strftime("%Y%m%d %H:%M:%S"),
-            "tscode": target_code,
+            "ts_code": target_code,
             "今日开盘价": float(open_price_input),
             "昨日结算价": float(pre_settle_input),
             "昨日收盘价": float(pre_close_input),

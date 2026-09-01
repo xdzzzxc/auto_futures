@@ -155,22 +155,22 @@ def select_future():
         choices.append(display_text)
         code_map[display_text] = (code, trend)
 
-    # # ====================== 【核心：强制加入你的必备品种】 ======================
-    # # 不管资讯有没有，这几个必须出现在选择框里
-    # from public import shared_data
-    # required_contracts = shared_data.quote_list  # ["m2609", "c2609", "jd2609"]
-    #
-    # # 默认趋势（如果资讯里没有，就给一个默认值）
-    # default_trend = "sideways"
-    #
-    # for code in required_contracts:
-    #     # 构造显示文本
-    #     display_text = f"{code}-{default_trend}-必备品种"
-    #
-    #     # 如果已经存在，就不重复添加
-    #     if display_text not in choices:
-    #         choices.append(display_text)
-    #         code_map[display_text] = (code, default_trend)
+    # ====================== 【核心：强制加入你的必备品种】 ======================
+    # 不管资讯有没有，这几个必须出现在选择框里
+    from public import shared_data
+    required_contracts = shared_data.quote_list  # ["m2609", "c2609", "jd2609"]
+
+    # 默认趋势（如果资讯里没有，就给一个默认值）
+    default_trend = "sideways"
+
+    for code in required_contracts:
+        # 构造显示文本
+        display_text = f"{code}-{default_trend}-必备品种"
+
+        # 如果已经存在，就不重复添加
+        if display_text not in choices:
+            choices.append(display_text)
+            code_map[display_text] = (code, default_trend)
     # ==========================================================================
 
     def show_scroll_choicebox(title, msg, choices) -> str | None:
@@ -338,7 +338,7 @@ def _init_shared_data(user_type, target_days, lot_size=1, get_price_interval=5):
     shared_data.lot_size = lot_size
     shared_data.interval = get_price_interval  # 获取即时行情价格的时间间隔
     prefix = re.match(r'[a-zA-Z]+', ts_code).group()
-    shared_data.min_price_change = futures_info[prefix]['min_price_change']
+    # shared_data.min_price_change = futures_info[prefix]['min_price_change']
     clean_old_trade_db(dry_run=False)
     fetch_future_data()
     # print(f"[{shared_data.ts_code}]历史交易数据：{shared_data.history_data_analysis}")
@@ -348,7 +348,6 @@ def _init_shared_data(user_type, target_days, lot_size=1, get_price_interval=5):
 if __name__ == "__main__":
     # 在这里注册钩子和信号，目标是在退出pycharm或关闭windows时将缓存中的数据写入数据库文件中
     import atexit
-    import signal
 
     def exit_clean():
         print("\n🛑 程序触发退出，正在落地行情缓存...")
@@ -364,20 +363,8 @@ if __name__ == "__main__":
 
     def signal_handler(signum, frame):
         exit_clean()
-        raise SystemExit(0)
-
-
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
-    # 完成注册，进行程序初始化阶段
-    _init_shared_data(
-        user_type=0,  # 0-虚拟用户，1-国泰君安期货用户
-        target_days=20,  # 期货品种历史交易日数据，从前一个交易日往前推
-        lot_size=1,  # 交易手数，不同期货品种有不同的最低交易手数
-        get_price_interval=5  # 每5秒获取一次品种价格
-    )
     # ========== 启动核心线程（daemon=True 安全退出）==========
+    _init_shared_data(user_type=0, target_days=20, lot_size=1, get_price_interval=5)
     price_thread = threading.Thread(target=get_current_price, name="PriceThread", daemon=True)
     order_thread = threading.Thread(target=order, name="OrderThread", daemon=True)
     monitor_thread = threading.Thread(target=run_monitor, name="MonitorThread", daemon=True)

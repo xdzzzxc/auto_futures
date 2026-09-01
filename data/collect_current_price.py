@@ -56,9 +56,9 @@ def get_current_price(ts_code=None):
         # 非交易时间仅打印日志
         if not shared_data.trade_flag():
             if not is_printed:
-                print_context(f"[{datetime.now()}] 非交易时段，当前界面合约：{current_ui_code}")
-                is_printed = True
-            sleep(0.5)
+                print(f"\r[{datetime.now().strftime('%H:%M:%S')}] 非交易时段，当前界面合约：{current_ui_code}  info from get_current_price", flush=True, end='')
+                # is_printed = True
+            sleep(1)
             continue
         is_printed = False
 

@@ -16,6 +16,48 @@ import signal
 
 logger = setup_trade_loggers()
 
+trans_map = {
+    "tscode": "ts_code",
+    "日期": "trade_datetime",
+    "今日开盘价": "today_open",
+    "昨日结算价": "pre_settle_hist",
+    '前日结算价': "pre_settle_hist",
+    "昨日收盘价": "pre_close",
+    "交易费": "trade_fee",
+    "盈亏系数": "coefficient",
+    "大盘走势": "market_trend",
+    "历史压力位": "history_resistance",
+    "历史支撑位": "history_support",
+    "历史最大振幅": "history_max_amp",
+    "历史平均振幅": "history_avg_amp",
+    "历史最小振幅": "history_min_amp",
+    "历史最大高开差": "history_max_high_open",
+    "历史最小高开差": "history_min_high_open",
+    "历史平均高开差": "history_avg_high_open",
+    "历史最大低开差": "history_max_low_open",
+    "历史最小低开差": "history_min_low_open",
+    "历史平均低开差": "history_avg_low_open",
+    "历史标准差": "history_std_dev",
+    "历史稳定性": "history_stability",
+    "历史收盘价差": "history_close_diff",
+    "历史走势": "history_trend",
+    "稳定振幅下限": "stable_amp_low",
+    "稳定振幅上限": "stable_amp_high",
+    "历史振幅标准差": "history_amp_std",
+    "今日最高价": "today_high",
+    "今日最低价": "today_low",
+    "总记录数": "total_rows",
+    "窗口记录数": "ticks_per_window",
+    "首单交易价": "today_open",
+    "最新价": "last_price",
+    "交易日走势": "day_trend",
+    "最新K线走势": "latest_k_trend",
+    "交易日价差": "day_price_diff",
+    "最新K线价差": "latest_k_diff",
+    "交易日振幅": "day_amplitude",
+
+}
+
 # 创建eval()函数命名空间
 BASE_EVAL_TPL = {
     "__builtins__": {"abs": abs, "min": min, "max": max, "len": len, "int": int, "map": map, "any": any,
@@ -24,12 +66,14 @@ BASE_EVAL_TPL = {
 
 # ======信号处理：安全退出======
 stop_flag = False
+
 def sig_handler(signum, frame):
     global stop_flag
     stop_flag = True
 
 signal.signal(signal.SIGINT, sig_handler)
 signal.signal(signal.SIGTERM, sig_handler)
+
 
 def extract_expr_vars(expr_str: str):
     """提取eval表达式中的变量名，忽略字面量字符串"""
@@ -44,14 +88,22 @@ def extract_expr_vars(expr_str: str):
         return []
 
 
-def get_db_data(ts_code, k_minutes=5):
+def get_db_data(ts_code, k_minutes=None):
     k_minutes = shared_data.k_minutes if k_minutes is None else k_minutes
-    tick_per_window = int(k_minutes * 60 / shared_data.get_price_interval)
+    ticks_per_window = int(k_minutes * 60 / shared_data.get_price_interval)
     ts_code = ts_code if ts_code is not None else shared_data.ts_code
-    try:
-        df = read_db(full_ts_code=ts_code)
-    except Exception:
-        df = None
+    df = None
+    while True:
+        try:
+            df = read_db(full_ts_code=ts_code)
+            # 读到df并且不为空，才跳出循环
+            if df is not None and not df.empty and len(df) >= 5:
+                break
+        except Exception:
+            pass
+        print(f"\r[{ts_code}]等待tick数据，目前已采集即时价格数：{len(df)}条。", flush=True)
+        sleep(1)
+
     if df is None or df.empty:
         print(f"\r暂时没有对应品种[{ts_code}]的今日交易数据库文件！", flush=True, end="")
         return
@@ -60,21 +112,19 @@ def get_db_data(ts_code, k_minutes=5):
     max_today_price = df["price"].max()
     min_today_price = df["price"].min()
     today_amplitude = max_today_price - min_today_price
-
+    last_price = df.iloc[0]["price"]
     long_direction = None
     short_direction = None
 
-    # open_first_price = df.iloc[-1]["price"]  # 今日第一条交易价
-    open_first_price = shared_data.open_price[ts_code]["今日开盘价"]  # 数据库中的第一条件价格记录不一定是今日开盘价
-    # print("今日首单交易价（今日开盘价）:", open_first_price)
-    print_context(f"今日开盘价 - {open_first_price}\n"
-          f"今日最高交易价（截止：{datetime.now().strftime('%H:%M:%S')}） - {max_today_price}")
-    last_price = df.iloc[0]["price"]
+    open_first_price = shared_data.open_price[ts_code]["今日开盘价"]
+    print_context(f"今日开盘价 - {open_first_price}  （截止：{datetime.now().strftime('%H:%M:%S')}）\n"
+                  f"最高交易价:{max_today_price} - 最低交易价：{min_today_price} - 最新价：{last_price} - 最高震幅 ：{today_amplitude}\n")
 
-    if total_rows <= tick_per_window:
+
+    if total_rows <= ticks_per_window:
         short_window_start_price = last_price
     else:
-        short_window_df = df.head(tick_per_window)
+        short_window_df = df.head(ticks_per_window)
         short_window_start_price = short_window_df.iloc[-1]["price"]
 
     long_price_diff = last_price - open_first_price
@@ -95,46 +145,32 @@ def get_db_data(ts_code, k_minutes=5):
         short_direction = "sideways"
 
     return {
+        "总记录数": total_rows,
+        "窗口记录数": ticks_per_window,
         "今日最高价": max_today_price,
         "今日最低价": min_today_price,
         "首单交易价": open_first_price,
         "最新价": last_price,
         "交易日走势": long_direction,
-        "最新K线走势": short_direction,  # 最新K线走势（自定义为1分钟、5分钟不等）
-        "交易日价差": long_price_diff,  # 最新价与开盘价差
-        "最新K线价差": short_price_diff,  #
+        "最新K线走势": short_direction,
+        "交易日价差": long_price_diff,
+        "最新K线价差": short_price_diff,
         "交易日振幅": today_amplitude,
     }
 
 
-trans_map = {
-    "压力位": "resistance",
-    "支撑位": "support",
-    "最大波动": "max_range",
-    "平均波动": "avg_range",
-    "最小波动": "min_range",
-    "最大高开差": "max_high_gap",
-    "最小高开差": "min_high_gap",
-    "平均高开差": "avg_high_gap",
-    "最大低开差": "max_low_gap",
-    "最小低开差": "min_low_gap",
-    "平均低开差": "avg_low_gap",
-    "前日结算价": "pre_settle_hist",
-    "标准差": "std_dev",
-    "稳定性": "stability",
-    "周期涨跌幅": "period_net_change",
-    "周期方向": "period_direction",
-    "tscode": "ts_code"
-}
 
 
 def rename_dict_keys(src_dict, mapping=None):
     if mapping is None:
         mapping = trans_map
     new_dict = {}
+    # 每一条：先写中文原key，紧跟着写英文别名，实现成对相邻
     for old_key, val in src_dict.items():
-        new_key = mapping.get(old_key, old_key)
-        new_dict[new_key] = val
+        new_dict[old_key] = val
+        if old_key in mapping:
+            eng_key = mapping[old_key]
+            new_dict[eng_key] = val
     return new_dict
 
 
@@ -152,10 +188,8 @@ def get_market_ctx(ts_code):
     market_ctx.update(open_info[ts_code])
     market_ctx["交易费"] = fut_info["fee"]
     market_ctx["盈亏系数"] = fut_info["coefficient"]
-    market_ctx["大盘走势"] = getattr(shared_data, "direction", "rise").lower()  # 测试时的默认值
+    market_ctx["大盘走势"] = getattr(shared_data, "direction", "rise").lower()
 
-
-    # 保留history_data，但不再调用bin_analyzer分箱
     if shared_data.history_data_analysis is None or ts_code not in shared_data.history_data_analysis:
         from data.data_from_sina import fetch_future_data
         history_data, _ = fetch_future_data(ts_code)
@@ -163,16 +197,17 @@ def get_market_ctx(ts_code):
         history_data = shared_data.history_data_analysis
     market_ctx.update(history_data)
 
-    # ========= 删除整块bin_analyzer分箱、flatten_bin_data扁平化逻辑 =========
-
+    # -------- 重点：中文key全部保留，追加英文别名key --------
     market_ctx = rename_dict_keys(market_ctx, trans_map)
+
+    # db_data返回的是中文键，同样执行追加英文别名
     db_data = get_db_data(ts_code=ts_code)
-    market_ctx.update(db_data)
+    db_data_with_eng = rename_dict_keys(db_data, trans_map)
+    market_ctx.update(db_data_with_eng)
 
     eval_ctx = BASE_EVAL_TPL.copy()
     eval_ctx.update(market_ctx)
 
-    # 仅更新全局快照，不做clear，业务逻辑不依赖此全局
     shared_data.market_ctx_dict.update(eval_ctx)
     return eval_ctx
 
@@ -187,7 +222,6 @@ def check_rule(rule_info: dict, market_ctx: dict):
         try:
             res = eval(expr, market_ctx)
             if not res:
-                # 条件不满足，提取变量，拿到实际值
                 var_names = extract_expr_vars(expr)
                 actual_map = {}
                 for vn in var_names:
@@ -253,6 +287,22 @@ def eval_price_expression(expr, market_ctx: dict):
         return None
 
 
+def calc_trade_pnl(trade_dir: str, cur_price: float, loss_price: float, profit_price: float, coefficient: float, lot_size:int, total_fee: float):
+    """计算止损、止盈对应的实际盈亏（已扣除双向手续费，纳入手数lot_size）"""
+    pnl_loss = 0.0
+    pnl_profit = 0.0
+    if trade_dir == "rise":
+        pnl_loss = (loss_price - cur_price) * coefficient * lot_size - total_fee
+        pnl_profit = (profit_price - cur_price) * coefficient * lot_size - total_fee
+    elif trade_dir == "fall":
+        pnl_loss = (cur_price - loss_price) * coefficient * lot_size - total_fee
+        pnl_profit = (cur_price - profit_price) * coefficient * lot_size - total_fee
+    return {
+        "pnl_loss": round(pnl_loss, 2),
+        "pnl_profit": round(pnl_profit, 2)
+    }
+
+
 def select_best_trade_rule(ts_code: str, ctx=None):
     """
     返回 (result_dict, detail_map)
@@ -312,12 +362,12 @@ def order(ts_code=None):
         if not cond_cool:
             reasons.append("请在上一次交易后的规定时间再进行交易！")
         try:
-            # if reasons:
-            #     if not no_print:
-            #         print_context(f"当前不满足交易条件，请等待...\n具体原因解析： {' '.join(reasons)}")
-            #         no_print = True
-            #     sleep(1)
-            #     continue
+            if reasons:
+                if not no_print:
+                    print_context(f"当前不满足交易条件，请等待...\n具体原因解析： {' '.join(reasons)}")
+                    no_print = True
+                sleep(1)
+                continue
 
             no_print = False
             print_context(f"现在可以进行正常期货交易，拟交易品种 - {ts_code}")
@@ -339,6 +389,7 @@ def order(ts_code=None):
                     fut_info = get_future_info(ts_code, cur_price)
                     total_fee = fut_info.get('fee', 0) * 2
                     coefficient = fut_info.get('coefficient', 0)
+                    lot_size = getattr(shared_data, "lot_size", 1)   # 获取手数，默认1
 
                     # 方向合法性校验标记
                     price_valid = True
@@ -358,32 +409,59 @@ def order(ts_code=None):
                     if not price_valid:
                         continue
 
-                    # 最小盈亏50校验
-                    final_loss = loss_price
-                    final_profit = profit_price
-                    final_break_even = 0  # 云保本单暂时未使用，置0
-
-                    # 止盈校验
-                    if abs((profit_price - cur_price)*coefficient) - total_fee < 50:
-                        shared_data.pre_profit = 50
-                        final_profit = 0
-                    # 止损校验
-                    if abs((loss_price - cur_price)*coefficient) - total_fee < 50:
-                        final_loss = 0
-
-                    # ==========写入shared_data.loss_profit_param==========
-                    shared_data.loss_profit_param["云止损单"] = final_loss
-                    shared_data.loss_profit_param["云止盈单"] = final_profit
-                    shared_data.loss_profit_param["云保本单"] = final_break_even
-
-                    # 日志打印 + 控制台上下文打印
-                    msg = (
-                        f"[{ts_code}] 写入shared_data.loss_profit_param完成 | "
-                        f"云止损单={final_loss}, 云止盈单={final_profit}, 云保本单={final_break_even}, "
-                        f"成交参考价={cur_price}, trade_dir={trade_dir}"
+                    # ========= 纳入lot_size手数，计算止盈盈亏值 =========
+                    pnl_result = calc_trade_pnl(
+                        trade_dir=trade_dir,
+                        cur_price=cur_price,
+                        loss_price=loss_price,
+                        profit_price=profit_price,
+                        coefficient=coefficient,
+                        lot_size=lot_size,
+                        total_fee=total_fee
                     )
-                    logger.info(msg)
-                    print_context(msg)
+                    calc_profit_val = pnl_result["pnl_profit"]   # 计算出的止盈盈亏(元)
+
+                    # 业务分支逻辑
+                    if calc_profit_val < 50:
+                        # 止盈盈亏小于50
+                        shared_data.pre_profit = 50
+                        shared_data.pre_loss = 0.0
+                        # 云全部置0
+                        final_cloud_profit = 0
+                        final_cloud_loss = 0
+                        final_cloud_break = 0
+
+                    elif calc_profit_val > 200:
+                        # 止盈盈亏大于200
+                        shared_data.pre_profit = calc_profit_val * 1.2
+                        shared_data.pre_loss = 0.0
+                        final_cloud_profit = profit_price
+                        final_cloud_loss = 0
+                        final_cloud_break = 200
+
+                    else:
+                        # 50 <= calc_profit_val <=200
+                        shared_data.pre_profit = calc_profit_val
+                        shared_data.pre_loss = 0.0
+                        final_cloud_profit = profit_price
+                        final_cloud_loss = 0
+                        final_cloud_break = 0
+
+                    # 写入loss_profit_param
+                    shared_data.loss_profit_param["云止盈单"] = final_cloud_profit
+                    shared_data.loss_profit_param["云止损单"] = final_cloud_loss
+                    shared_data.loss_profit_param["云保本单"] = final_cloud_break
+
+                    # 下单时务必打印完整设置信息
+                    set_msg = (
+                        f"【下单设置详情】品种:{ts_code},方向:{trade_dir},手数lot_size={lot_size}\n"
+                        f"成交参考价cur_price={cur_price}\n"
+                        f"计算止盈盈亏calc_profit_val={calc_profit_val:.2f}元\n"
+                        f"shared_data.pre_profit={shared_data.pre_profit:.2f}, shared_data.pre_loss={shared_data.pre_loss:.2f}\n"
+                        f"云止盈单={final_cloud_profit},云止损单={final_cloud_loss},云保本单={final_cloud_break}"
+                    )
+                    print_context(set_msg)
+                    # logger.info(set_msg)
 
                     # 设置云止损UI调用
                     shared_data.ui_busy = True
@@ -404,14 +482,12 @@ def order(ts_code=None):
                     print_context(f"❌策略[{r_name}]未通过，不满足条件：{fails}")
 
             sleep(5)
-
         except Exception as e:
             logger.exception(f"order_loop异常")
             sleep(1)
 
 
 if __name__ == "__main__":
-    order(ts_code="m2609")
-    # get_db_data(ts_code="jd2609")
-    print(get_market_ctx(ts_code="m2609"))
-    # select_best_trade_rule(ts_code="c2609")
+    # order(ts_code="m2609")
+    market_ctx = get_market_ctx(ts_code="dj2609")
+    print(market_ctx)
