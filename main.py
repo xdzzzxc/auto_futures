@@ -158,7 +158,7 @@ def select_future():
     # ====================== 【核心：强制加入你的必备品种】 ======================
     # 不管资讯有没有，这几个必须出现在选择框里
     from public import shared_data
-    required_contracts = shared_data.quote_list  # ["m2609", "c2609", "jd2609"]
+    required_contracts = shared_data.quote_set  # ["m2609", "c2609", "jd2609"]
 
     # 默认趋势（如果资讯里没有，就给一个默认值）
     default_trend = "sideways"
@@ -246,7 +246,7 @@ def select_future():
         parts = selected_text.split("-")
         code = parts[0]
         trend = parts[1]
-        shared_data.ts_code = code
+        shared_data.ts_code = code.lower()
         shared_data.direction = trend
     else:
         print_context("没有选择合适的期货商品，程序已退出！")
@@ -276,12 +276,12 @@ def set_stop_loss():  # 窗口止损止盈设置
     # 标签+输入框
     tk.Label(win, text="止盈值：").place(x=30, y=20)
     e1 = tk.Entry(win, width=15)
-    e1.insert(0, "0")
+    e1.insert(0, "200")
     e1.place(x=90, y=20)
 
     tk.Label(win, text="止损值：").place(x=30, y=50)
     e2 = tk.Entry(win, width=15)
-    e2.insert(0, "0")
+    e2.insert(0, "500")
     e2.place(x=90, y=50)
 
     def confirm():
@@ -348,7 +348,7 @@ def _init_shared_data(user_type, target_days, lot_size=1, get_price_interval=5):
 if __name__ == "__main__":
     # 在这里注册钩子和信号，目标是在退出pycharm或关闭windows时将缓存中的数据写入数据库文件中
     import atexit
-
+    import signal
     def exit_clean():
         print("\n🛑 程序触发退出，正在落地行情缓存...")
         try:
@@ -362,7 +362,13 @@ if __name__ == "__main__":
 
 
     def signal_handler(signum, frame):
+        print(f"\n⚠️ 收到系统信号 {signum}，执行缓存落库")
         exit_clean()
+        raise SystemExit(0)
+    signal.signal(signal.SIGINT, signal_handler)
+    if hasattr(signal, "SIGTERM"):
+        signal.signal(signal.SIGTERM, signal_handler)
+
     # ========== 启动核心线程（daemon=True 安全退出）==========
     _init_shared_data(user_type=0, target_days=20, lot_size=1, get_price_interval=5)
     price_thread = threading.Thread(target=get_current_price, name="PriceThread", daemon=True)
@@ -370,8 +376,9 @@ if __name__ == "__main__":
     monitor_thread = threading.Thread(target=run_monitor, name="MonitorThread", daemon=True)
     reget_open_price_thread = threading.Thread(target=reget_open_price, name="ReGetOpenPriceThread", daemon=True)
     price_thread.start()
-    print_context("30秒后开始检索价格数据下单！")
+    # print_context("30秒后开始检索价格数据下单！")
     order_thread.start()
+    print(f"order线程is_alive={order_thread.is_alive()}")
     if shared_data.pre_profit == 0 and shared_data.pre_loss == 0:
         print_context("用户没有手动设置固定止损止盈值，程序没有启动自动止损止盈监控进程！其他线程已开启：\n"
                       "获取期货品种即时行情线程-collect_current_price(PriceThread)\n订单线程-trade.order(OrderThread)")

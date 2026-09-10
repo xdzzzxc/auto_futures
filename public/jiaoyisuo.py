@@ -37,7 +37,7 @@ futures_info = {
     'sa': {'exchange': '郑商所', 'name': '纯碱', 'ext': 'CZC', 'margin': 0.10, 'leverage': 10.0, 'commission_rate': 0.0002, 'night_trading': True, 'min_price_change': 1, 'one_tick_profit': 20},
     'zc': {'exchange': '郑商所', 'name': '动力煤', 'ext': 'CZC', 'margin': 0.15, 'leverage': 6.67, 'commission': 6, 'night_trading': False, 'min_price_change': 0.2, 'one_tick_profit': 20},
     'oi': {'exchange': '郑商所', 'name': '菜油', 'ext': 'CZC', 'margin': 0.08, 'leverage': 12.5, 'commission': 3, 'night_trading': True, 'min_price_change': 2, 'one_tick_profit': 10},
-    'rm': {'exchange': '郑商所', 'name': '菜粕', 'ext': 'CZC', 'margin': 0.07, 'leverage': 14.29, 'commission': 1.5, 'night_trading': True, 'min_price_change': 1, 'one_tick_profit': 10},
+    'rm': {'exchange': '郑商所', 'name': '菜粕', 'ext': 'CZC', 'margin': 0.07, 'leverage': 14.29, 'commission': 7.5, 'night_trading': True, 'min_price_change': 1, 'one_tick_profit': 10},
     'cy': {'exchange': '郑商所', 'name': '棉纱', 'ext': 'CZC', 'margin': 0.08, 'leverage': 12.5, 'commission': 4.3, 'night_trading': True, 'min_price_change': 5, 'one_tick_profit': 25},
     'ap': {'exchange': '郑商所', 'name': '苹果', 'ext': 'CZC', 'margin': 0.10, 'leverage': 10.0, 'commission': 5, 'night_trading': False, 'min_price_change': 1, 'one_tick_profit': 10},
     'jr': {'exchange': '郑商所', 'name': '粳稻', 'ext': 'CZC', 'margin': 0.05, 'leverage': 20.0, 'commission': 3, 'night_trading': False, 'min_price_change': 1, 'one_tick_profit': 20},

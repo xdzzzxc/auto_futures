@@ -40,7 +40,7 @@ def run_monitor():
             continue
 
         in_trade_time = trade_flag()
-        run_allow = in_trade_time and shared_data.trade_flag
+        run_allow = in_trade_time
 
         with monitor_lock:
             thread_alive = (monitor_thread is not None) and monitor_thread.is_alive()

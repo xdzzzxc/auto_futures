@@ -1,7 +1,7 @@
 import requests
 import os
+import datetime
 token = os.getenv("push_token")
-
 
 def dict_to_text(dict_data:dict) -> str:
     text = ""
@@ -29,6 +29,6 @@ def send_msg(msg, title="国泰君安"):
         print(f"Error:{e}")
 
 
-# if __name__ == '__main__':
-#     msg = test_dict
-#     send_msg(msg)
+if __name__ == '__main__':
+    msg = f"交易成功 - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    send_msg(msg)

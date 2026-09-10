@@ -54,17 +54,17 @@ logger = None  # 根据用户选择的日志器
 ths_lock = threading.Lock()  # 创建名称为ths_lock的进程锁
 dict_lock = threading.Lock()  # 创建字典读写线程安全锁
 ths_future_edit_lock = False  # 期货名称输入（edit）框是否锁定，默认是False，亦即可以输入、编辑
-ts_code = ""  # 期货商品代码（如au2601)
+ts_code = "c2611"  # 期货商品代码（如au2601)
 search_future_list = []  # 待搜索的期货商品代码列表
 open_price = {}  # 交易品种开盘价信息：trade.order()
-pre_profit = 0.0  # 手动设置固定止盈值
-pre_loss = 0.0  # 手动设置固定止损值
+pre_profit = 30.0  # 手动设置固定止盈值
+pre_loss = -30.0  # 手动设置固定止损值
 target_days = 20  # 从tu_share获取ts_code历史行情数据（天数）
 lot_size = 1  # 期货买卖手数，默认值1，不同商品规定必须最少多少手
-direction = "rise"  # 如果有专业推荐，直接写买多-Rise、卖空-Fall，否则由历史数据与今日开盘价来确定多空方向
+direction = "fall"  # 如果有专业推荐，直接写买多-Rise、卖空-Fall，否则由历史数据与今日开盘价来确定多空方向
 history_trade_df = None  # 期货品种历史交易原始数据，dataframe格式；
 history_data_analysis = None  # 期货商品历史交易数据，来源于future_data模块
-loss_profit_param = {"云止盈单": 3338, "云止损单": 3120, "云保本单": 0}  # 对应止损止盈设置3450,3120
+loss_profit_param = {"云止盈单": 0, "云止损单": 0, "云保本单": 0}  # 对应止损止盈设置3450,3120
 future_quote_dict = {}  # 期货行情 https://push2.eastmoney.com/api/qt/ulist.np/get
 future_info_dict = {}  # 期货资讯行情
 # "交易方向", "交易价", "止损价", "止盈价", "交易前总额", "交易后总额", "利润"
@@ -74,7 +74,7 @@ BIN_NUM = 8  # 配置参数：箱体数量，日内短线推荐8个等宽箱体
 
 total_balance = 0.0  # 账户总金额
 available_balance = 0.0  # 账户可用资金
-quote_list = ["m2611", "c2610", "jd2610", "ma2610"]  # 默认要从东方财富网获取开盘价等信息的期货品种
+quote_set = {"m2611", "c2611", "ma2611" ,"sa2701", "cs2611", "fg2701", "RM2611"}  # 默认要从东方财富网获取开盘价等信息的期货品种
 
 trade_time_table = [(9, 0, 10, 15), (10, 30, 11, 30), (13, 30, 15, 0), (21, 0, 23, 0)]  # 交易时间表, 最后一个用测试。
 start_trade_date = None  # 期货开始交易时间（下单日期）
@@ -82,9 +82,8 @@ threading_monitor_profit_loss = False  # 设置自动止损止盈开关
 
 # ===================== 核心函数 =====================
 def is_trade_status() -> bool:
-    """
-    判断是否持仓或是否在交易状态中：权益 != 可用资金 → 有持仓、交易中、返回True
-    返回：True=有持仓 / False=无持仓
+    """判断是否持仓或是否在交易状态中：权益!= 可用资金 → 有持仓、交易中、返回 True
+    返回：True = 有持仓 / False = 无持仓
     """
     global print_on_off
     valid_chars = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "-"}
@@ -93,7 +92,6 @@ def is_trade_status() -> bool:
         with ths_lock:
             equity_ctrl = ths_common_control["权益"][0]
             available_ctrl = ths_common_control["可用资金"][0]
-
             equity_text = equity_ctrl.window_text().strip()
             available_text = available_ctrl.window_text().strip()
 
@@ -102,14 +100,25 @@ def is_trade_status() -> bool:
             s = "".join(c for c in text if c in valid_chars)
             return float(s) if s else 0.0
 
-        equity = get_num(equity_text)  # 权益资金即用户总资金
-        available = get_num(available_text)  # 可用资金（如果在交易中则可用资金就会小于总资金）
+        equity = get_num(equity_text) # 权益资金即用户总资金
+        available = get_num(available_text) # 可用资金（如果在交易中则可用资金就会小于总资金）
         if print_on_off:
-            print(f"权益：{equity} 可用资金：{available}")
+            print(f" 权益：{equity} 可用资金：{available} 固定止盈值：{pre_profit} 元 固定止损值：{pre_loss} 元 ")
             print_on_off = False
         # 差异 > 1 元判定为有持仓
-        return abs(equity - available) > 1.0
+        has_pos = abs(equity - available) > 1.0
 
+        # =====================【新增冷却判断逻辑】=====================
+        cooling = False
+        with dict_lock:
+            if valid_time is not None:
+                now = datetime.now()
+                if now < valid_time:
+                    cooling = True
+                    print_context(f"未到设定的交易时间：{valid_time.strftime('%H:%M:%S')}")
+        # ==============================================================
+
+        return has_pos or cooling
     except:
         return False
 
@@ -143,11 +152,76 @@ def is_around(checked_value, target_value, error_range=5):  # 检测坐标位置
     return (target_value - error_range) <= checked_value <= (target_value + error_range)
 
 
-def click_position(rect_tuple):
+# def click_position(rect_tuple):
+#     with mouse_lock:
+#         x = rect_tuple[0] + (rect_tuple[2] - rect_tuple[0])//2
+#         y = rect_tuple[1] + (rect_tuple[3] - rect_tuple[1])//2
+#         return mouse.click(button='left', coords=(x, y))
+
+def click_position(rect_tuple, settle_wait: float = 0.2, post_click_wait: float = 0.15, stable_threshold: int = 2, max_wait_timeout: float = 3.0):
+    """
+    点击矩形控件中心，内置：等待鼠标稳定 + 移动 + 分段按下抬起 + 超时保护
+    :param rect_tuple: (left, top, right, bottom)
+    :param settle_wait: 需要持续稳定的时长，人鼠标静止这么久才执行点击
+    :param post_click_wait: 点击完成后等待UI响应时间
+    :param stable_threshold: 像素阈值，鼠标移动超过该像素视为在操作
+    :param max_wait_timeout: 最长等待超时，超过则抛TimeoutError，防止永久卡死
+    """
+
+    def get_cursor_pos():
+        return mouse.win32api.GetCursorPos()
+
+    l, t, r, b = rect_tuple
+    # 校验：right必须大于left，bottom大于top，捕获非法矩形
+    if not (r > l and b > t):
+        raise ValueError(f"非法矩形 {rect_tuple}，left/top/right/bottom 必须满足 right>left、bottom>top")
+
     with mouse_lock:
-        x = rect_tuple[0] + (rect_tuple[2] - rect_tuple[0])//2
-        y = rect_tuple[1] + (rect_tuple[3] - rect_tuple[1])//2
-        return mouse.click(button='left', coords=(x, y))
+        target_x = l + (r - l) // 2
+        target_y = t + (b - t) // 2
+
+        # 等待鼠标稳定，带总超时
+        total_start = time.time()
+        stable_start = time.time()
+        last_x, last_y = get_cursor_pos()
+
+        while True:
+            if time.time() - total_start > max_wait_timeout:
+                raise TimeoutError(
+                    f"click_position:等待鼠标稳定超时{max_wait_timeout}s，检测到人为持续操作鼠标，放弃点击。目标坐标({target_x},{target_y})"
+                )
+
+            curr_x, curr_y = get_cursor_pos()
+            if abs(curr_x - last_x) > stable_threshold or abs(curr_y - last_y) > stable_threshold:
+                stable_start = time.time()
+                last_x, last_y = curr_x, curr_y
+
+            if time.time() - stable_start >= settle_wait:
+                break
+            time.sleep(0.02)
+
+        # pywinauto移动鼠标到目标位置
+        mouse.move(coords=(target_x, target_y))
+        time.sleep(0.05)
+
+        # 再次确认鼠标到达目标并稳定一小段
+        stable_start = time.time()
+        last_x, last_y = get_cursor_pos()
+        while time.time() - stable_start < 0.1:
+            cx, cy = get_cursor_pos()
+            if abs(cx - last_x) > stable_threshold or abs(cy - last_y) > stable_threshold:
+                stable_start = time.time()
+                last_x, last_y = cx, cy
+            time.sleep(0.02)
+
+        # pywinauto分段模拟按下抬起
+        mouse.press(button="left", coords=(target_x, target_y))
+        time.sleep(0.04)
+        mouse.release(button="left", coords=(target_x, target_y))
+
+        # 等待UI消化点击事件
+        time.sleep(post_click_wait)
+    return True
 
 def simulate_input(window, ctrl, value):
 
@@ -286,4 +360,5 @@ if __name__ == "__main__":
     # print_context(f"今天是：{datetime.now().strftime('%Y/%m/%d %H:%M:%S')},期货交易：{is_trade_period}")
     # print(default_futures)
     # get_direction()
-    clean_old_trade_db()
+    # click_position(rect_tuple=(100,100,200,200))
+    print(is_trade_status())

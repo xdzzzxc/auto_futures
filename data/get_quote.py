@@ -53,7 +53,7 @@ def get_trade_day_str() -> tuple[bool, str, str]:
 
 
 def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.np/get"):
-    target_code = shared_data.ts_code.strip() if ts_code is None else ts_code
+    target_code = (shared_data.ts_code.strip() if ts_code is None else ts_code).lower()
 
     while True:
         cur_time = datetime.now().strftime("%H:%M:%S")
@@ -63,7 +63,7 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
             continue
         else:
             print("")
-            print_context.print_context(f"开始获取期货品种[{target_code}]的今日开盘信息")
+            # print_context.print_context(f"开始获取期货品种[{target_code}]的今日开盘信息")
             break
 
     EXCHANGE_CODE = {
@@ -130,7 +130,7 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
                             data = json.load(fp)
                         result_data[target_code] = data
                         found_local_file = True
-                        print_context.print_context(f"✅ 从本地成功加载数据文件：{file_path}")
+                        print_context.print_context(f"✅ 程序成功加载本地数据文件：{file_path}")
                         break
                     except Exception:
                         continue
@@ -182,7 +182,7 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
             # "percent": item.get("f3", 0.0)
         }
         result_data[target_code] = data_item
-        open_price = data_item.get("open", 0.0)
+        open_price = data_item.get("今日开盘价", 0.0)
         if open_price == 0.0 or open_price is None:
             choice = message_box(
                 f"未获取到 {target_code} 的有效开盘价！\n\n按[确定]键手动输入，按[取消]键将退出程序！",
@@ -257,4 +257,4 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
 
 
 if __name__ == '__main__':
-    print(get_open_price(ts_code="m2609"))
+    print(get_open_price(ts_code="fg2611"))

@@ -9,7 +9,7 @@ from time import sleep
 # 取消时间间隔判断，固定满100条入库
 BUFFER_MAX_NUM = 100
 
-def get_current_price(ts_code=None):
+def get_current_price(ts_code="m2611"):
     from public.shared_data import simulate_input
     price_patten = re.compile(r"^\d+\.\d+$|^\d+$")
     is_printed = False
@@ -50,7 +50,7 @@ def get_current_price(ts_code=None):
                 shared_data.price_buffer.clear()
             if cache_data:
                 batch_write_price(cache_data)
-                print_context(f"[{datetime.now()}] 合约切换 {current_ui_code} → {new_ui_code}，强制入库{len(cache_data)}条")
+                print_context(f"[{datetime.now()}] 合约切换 {current_ui_code} → {new_ui_code}(shared_data.ts_code:{shared_data.ts_code})，强制入库{len(cache_data)}条")
             current_ui_code = new_ui_code
 
         # 非交易时间仅打印日志
@@ -74,7 +74,7 @@ def get_current_price(ts_code=None):
                 sleep(0.2)
                 continue
             # 记录：时间、价格、界面实时合约
-            row = [date_str, price_text, current_ui_code]
+            row = [date_str, price_text, current_ui_code.lower()]
             # 写入内存缓冲区
             with shared_data.buffer_lock:
                 shared_data.price_buffer.append(row)

@@ -185,7 +185,7 @@ def fetch_future_data(ts_code=None, days=None):
             print_context(f"⚠️线上拉取新浪行情异常 {ts_code}: {str(e)}")
             return None, None
 
-        print(sina_fut_data.head(20))
+        # print(sina_fut_data.head(20))
         # 列名转英文，用于内部计算
         sina_fut_data.rename(columns=zh_en_dict, inplace=True)
         # 日期清洗

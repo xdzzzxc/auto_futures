@@ -75,17 +75,17 @@ def analyze_text(title: str, cn_name: str, content: str = "") -> Optional[Tuple[
     trend_name, score = best_trend
 
     if neg_flag:
-        if trend_name == "Rise":
-            trend_name = "Fall"
-        elif trend_name == "Fall":
-            trend_name = "Rise"
+        if trend_name == "rise":
+            trend_name = "fall"
+        elif trend_name == "fall":
+            trend_name = "rise"
     return trend_name, score
 
 
 # ===================== 过滤字典，只保留shared_data.quote_list里面的合约key =====================
 def filter_by_white_list(src_dict: Dict[str, List[str]]) -> Dict[str, List[str]]:
     """仅保留shared_data.quote_list内的合约"""
-    keep_set = set(shared_data.quote_list)
+    keep_set = set(shared_data.quote_set)
     out = {k: v for k, v in src_dict.items() if k in keep_set}
     return out
 
@@ -134,7 +134,7 @@ def query_future_info(url="https://futures.cngold.org/qsyw/", headers: dict = No
 
     matched = {}
     # 使用shared_data.quote_list作为合约列表
-    for contract in shared_data.quote_list:
+    for contract in shared_data.quote_set:
         code_match = RE_CODE_EXTRACT.findall(contract)
         if not code_match:
             continue
@@ -174,7 +174,7 @@ def get_data_from_ja(fut_type=0):
 
     if not html:
         # 页面失败，对quote_list全部填充占位
-        for contract in shared_data.quote_list:
+        for contract in shared_data.quote_set:
             result[contract] = ["NoInfo", f"暂无国泰君安资讯 - {contract}"]
         end_time = time.time()
         print_context(f"获取国泰君安期货资讯耗时：{end_time - start_time:.2f}秒。")
@@ -200,7 +200,7 @@ def get_data_from_ja(fut_type=0):
 
     # 解析资讯：遍历配置的完整合约，提取短码匹配中文名称
     for content_text, pub_time in valid_bundle:
-        for contract in shared_data.quote_list:
+        for contract in shared_data.quote_set:
             code_match = RE_CODE_EXTRACT.findall(contract)
             if not code_match:
                 continue
@@ -218,7 +218,7 @@ def get_data_from_ja(fut_type=0):
                 result[contract] = [trend, out_text]
 
     # 补齐quote_list全部占位
-    for contract in shared_data.quote_list:
+    for contract in shared_data.quote_set:
         if contract and contract not in result:
             result[contract] = ["NoInfo", f"暂无国泰君安资讯 - {contract}"]
 
@@ -249,7 +249,5 @@ def merge_two_info_dict() -> Dict[str, List[str]]:
 # ===================== 测试运行 =====================
 if __name__ == "__main__":
     # 测试时手动给quote_list赋值，正式运行由公共模块初始化
-    shared_data.quote_list = ["m2610", "c2610", "jd2610", "ma2610"]
-
     ja_data = merge_two_info_dict()
     print(ja_data)

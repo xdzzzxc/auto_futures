@@ -1,5 +1,6 @@
 import requests
 import os
+from datetime import datetime
 sender = os.getenv(r"wei_push")
 
 def send_msg(msg, title="缘煦-国泰君安"):
@@ -14,7 +15,7 @@ def send_msg(msg, title="缘煦-国泰君安"):
     msg = msg.replace("\n", "\n\n")
     data = {'title': title, 'desp': msg}
     res = requests.post(url, data=data)
-    print(f"send msg: {res.text}")
+    print(f"交易时间：{datetime.now()} - func:send_msg\nsend msg: {res.text}")
 
 # if __name__ == '__main__':
 #     send_msg(title="期货国泰君安", msg="您已进行期货交易中！")
