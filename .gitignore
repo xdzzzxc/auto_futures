@@ -1,4 +1,4 @@
-*
+
 !*.py
 !*/
 __pycache__/
@@ -10,4 +10,4 @@ zxc.py
 QR.png
 *.json
 *.pkl
-
+*.txt

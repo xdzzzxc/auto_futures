@@ -1,0 +1,234 @@
+common_conditions:
+  - expr: "ts_code == ths_tscode"
+  - expr: "any(map(ts_code.startswith, ['m', 'c', 'jd', 'ma']))"
+  - expr: "not is_trade_status()"
+
+strategy_001:
+  comment: 开盘下单配置参数,大盘rise,高开且K线为rise则买多并设置止盈固定值
+  enable: true
+  trade_time: 9:00-9:15 21:-21:15
+  priority: 100
+  conditions:
+    - expr: "market_trend == 'rise'"
+      enable: true
+    - expr: "(hour == 9 and minute < 15) or (hour == 21 and minute < 15)"
+      enable: true
+      desc: "限制在开盘的15分钟内下单"
+    - expr: "(today_open >= pre_settle_hist) or (today_open >= pre_close)"
+      enable: true
+    - expr: "latest_k_trend == 'rise'"
+    - expr: "last_price < (today_open + (history_min_high_open if history_min_high_open != 0 else round(history_avg_high_open/2)))"
+  trade_params:
+    pre_profit: "50 + trade_fee * 2"
+    pre_loss: "-50 - trade_fee * 2"
+    trade_direction: "rise"
+    profit_price: "today_open + round((history_avg_high_open+history_max_high_open)/2)"
+    loss_price: "history_support"
+
+strategy_002:
+  comment: 开盘下单配置参数,大盘fall,低开且K线为fall则卖空并设置止盈固定值
+  enable: true
+  trade_time: 9:00-9:15 21:-21:15
+  priority: 100
+  conditions:
+    - expr: "market_trend == 'fall'"
+    - expr: "(hour == 9 and minute < 15) or (hour == 21 and minute < 15)"
+    - expr: "(today_open <= pre_settle_hist) or (today_open <= pre_close)"
+    - expr: "latest_k_trend == 'fall'"
+    - expr: "last_price > (today_open - (history_min_low_open if history_min_low_open != 0 else round(history_avg_low_open/2)))"
+  trade_params:
+    pre_profit: "50 + trade_fee * 2"
+    pre_loss: "-50 - trade_fee * 2"
+    trade_direction: "fall"
+    profit_price: "today_open - round((history_avg_low_open + history_max_low_open)/2)"
+    loss_price: "history_resistance"
+
+strategy_003:
+  comment: 开盘下单配置参数,大盘走势为sideways,前1分钟K线为rise则买多并设置止盈固定值
+  enable: true
+  priority: 101
+  conditions:
+    - expr: "market_trend == 'sideways'"
+    - expr: "(hour == 9 and minute < 15) or (hour == 21 and minute < 15)"
+    - expr: "today_open > pre_settle_hist"
+    - expr: "latest_k_trend == 'rise'"
+    - expr: "last_price < today_open + history_min_high_open"
+  trade_params:
+    pre_profit: "30 + trade_fee * 2"
+    pre_loss: "-30 - trade_fee * 2"
+    trade_direction: "rise"
+    profit_price: "last_price + 20"
+    loss_price: "history_support"
+
+strategy_004:
+  comment: 开盘下单配置参数,大盘走势为sideways,前1分钟K线为fall则卖空并设置止盈固定值
+  enable: true
+  priority: 101
+  conditions:
+    - expr: "market_trend == 'sideways'"
+    - expr: "(hour == 9 and minute < 15) or (hour == 21 and minute < 15)"
+    - expr: "today_open < pre_settle_hist"
+    - expr: "latest_k_trend == 'fall'"
+    - expr: "last_price > today_open - history_min_low_open"
+  trade_params:
+    pre_profit: "30 + trade_fee * 2"
+    pre_loss: "-30 - trade_fee * 2"
+    trade_direction: "fall"
+    profit_price: "last_price - 20"
+    loss_price: "history_resistance"
+
+
+strategy_005:
+  comment: 期货中盘下单策略(9:10-10:15,21:10-22:00),大盘走势、日走势、最新K线走势、最新价比较,买多策略
+  enable: true
+  priority: 201
+  conditions:
+    - expr: "market_trend == 'rise' and day_trend == 'rise' and latest_k_trend == 'rise'"
+    - expr: "(last_price + 5) < above1_price or (last_price + 5) < above2_price"
+    - expr: "today_high - last_price > 5"
+    - expr: "((hour*60+minute)>=550 and (hour*60+minute)<=615) or ((hour*60+minute)>=1270 and (hour*60+minute)<=1320)"
+  trade_params:
+    pre_profit: "30 + trade_fee * 2"
+    pre_loss: "-30 - trade_fee * 2"
+    trade_direction: "rise"
+    profit_price: "last_price + 10"
+    loss_price: "last_price - 10"
+
+strategy_006:
+  comment: 期货中盘下单策略(9:10-10:15,21:10-22:00),大盘走势、日走势、最新K线走势、最新价比较,卖空策略
+  enable: true
+  priority: 201
+  conditions:
+    - expr: "market_trend == 'fall' and day_trend == 'fall' and latest_k_trend == 'fall'"
+    - expr: "(last_price - 5) > below1_price or (last_price - 5) > below2_price"
+    - expr: "last_price - today_low > 5"
+    - expr: "((hour*60+minute)>=550 and (hour*60+minute)<=615) or ((hour*60+minute)>=1270 and (hour*60+minute)<=1320)"
+  trade_params:
+    pre_profit: "30 + trade_fee * 2"
+    pre_loss: "-30 - trade_fee * 2"
+    trade_direction: "fall"
+    profit_price: "last_price - 10"
+    loss_price: "last_price + 10"
+
+strategy_007:
+  comment: 期货中盘下单策略(22:00以后,10:00以后),大盘走势、日走势、最新K线走势、最新价比较,卖空策略
+  enable: true
+  priority: 201
+  conditions:
+    - expr: "market_trend == 'fall' and day_trend == 'fall' and latest_k_trend == 'fall'"
+    - expr: "(last_price - 5) > below1_price or (last_price - 5) > below2_price"
+    - expr: "last_price - today_low > 5"
+    - expr: "hour >= 22 or (hour >= 10 and hour <= 15)"
+  trade_params:
+    pre_profit: "30 + trade_fee * 2"
+    pre_loss: "-30 - trade_fee * 2"
+    trade_direction: "fall"
+    profit_price: "last_price - 10"
+    loss_price: "last_price + 10"
+
+strategy_008:
+  comment: 期货中盘下单策略(22:00以后,10:00以后),大盘走势、日走势、最新K线走势、最新价比较,买多策略
+  enable: true
+  priority: 201
+  conditions:
+    - expr: "market_trend == 'rise' and day_trend == 'rise' and latest_k_trend == 'rise'"
+    - expr: "(last_price + 5) < above1_price or (last_price + 5) < above2_price"
+    - expr: "today_high - last_price > 5"
+    - expr: "hour >= 22 or (hour >= 10 and hour <= 15)"
+  trade_params:
+    pre_profit: "30 + trade_fee * 2"
+    pre_loss: "-30 - trade_fee * 2"
+    trade_direction: "rise"
+    profit_price: "last_price + 10"
+    loss_price: "last_price - 10"
+
+strategy_009:
+  comment: 期货中盘下单策略(22:00以后,10:00以后),大盘走势、日走势、最新K线走势、最新价比较,买多策略
+  enable: true
+  priority: 200
+  conditions:
+    - expr: "market_trend == 'sideways' and day_trend == 'rise' and latest_k_trend == 'rise'"
+    - expr: "(last_price + 5) < above1_price or (last_price + 5) < above2_price"
+    - expr: "today_high - last_price > 5"
+    - expr: "hour >= 22 or (hour >= 10 and hour <= 15)"
+  trade_params:
+    pre_profit: "30 + trade_fee * 2"
+    pre_loss: "-30 - trade_fee * 2"
+    trade_direction: "rise"
+    profit_price: "last_price + 10"
+    loss_price: "last_price - 10"
+
+strategy_010:
+  comment: 期货中盘下单策略(22:00以后,10:00以后),大盘走势、日走势、最新K线走势、最新价比较,卖空策略
+  enable: true
+  priority: 200
+  conditions:
+    - expr: "market_trend == 'sideways' and day_trend == 'fall' and latest_k_trend == 'fall'"
+    - expr: "(last_price - 5) > below1_price or (last_price - 5) > below2_price"
+    - expr: "last_price - today_low > 5"
+    - expr: "hour >= 22 or (hour >= 10 and hour <= 15)"
+  trade_params:
+    pre_profit: "30 + trade_fee * 2"
+    pre_loss: "-30 - trade_fee * 2"
+    trade_direction: "fall"
+    profit_price: "last_price - 10"
+    loss_price: "last_price + 10"
+
+# 不要大盘走势，只考虑日走势和最新K线走势
+strategy_011:
+  comment: 期货中盘下单策略(22:00以后,10:00以后),日走势、最新K线走势、最新价比较,买多策略
+  enable: true
+  priority: 200
+  conditions:
+    - expr: "day_trend == 'rise' and latest_k_trend == 'rise'"
+    - expr: "last_price < above1_price or last_price < above2_price"
+    - expr: "today_high - last_price > 5"
+    - expr: "hour >= 22 or (hour >= 10 and hour <= 15)"
+  trade_params:
+    pre_profit: "30 + trade_fee * 2"
+    pre_loss: "-30 - trade_fee * 2"
+    trade_direction: "rise"
+    profit_price: "last_price + 10"
+    loss_price: "last_price - 10"
+
+strategy_012:
+  comment: 期货中盘下单策略(22:00以后,10:00以后),日走势、最新K线走势、最新价比较,卖空策略
+  enable: true
+  priority: 200
+  conditions:
+    - expr: "day_trend == 'fall' and latest_k_trend == 'fall'"
+    - expr: "last_price > below1_price or last_price > below2_price"
+    - expr: "last_price - today_low > 5"
+    - expr: "hour >= 22 or (hour >= 10 and hour <= 15)"
+  trade_params:
+    pre_profit: "30 + trade_fee * 2"
+    pre_loss: "-30 - trade_fee * 2"
+    trade_direction: "fall"
+    profit_price: "last_price - 10"
+    loss_price: "last_price + 10"
+
+strategy_013:
+  comment: 期货中盘下单策略(22:00以后,10:00以后),日走势、最新K线走势、最新价比较,买多策略
+  enable: true
+  priority: 200
+  conditions:
+    - expr: "latest_k_trend == 'rise'"
+  trade_params:
+    pre_profit: "30 + trade_fee * 2"
+    pre_loss: "-30 - trade_fee * 2"
+    trade_direction: "rise"
+    profit_price: "last_price + 10"
+    loss_price: "last_price - 10"
+
+strategy_014:
+  comment: 期货中盘下单策略(22:00以后,10:00以后),日走势、最新K线走势、最新价比较,卖空策略
+  enable: true
+  priority: 200
+  conditions:
+    - expr: "latest_k_trend == 'fall'"
+  trade_params:
+    pre_profit: "30 + trade_fee * 2"
+    pre_loss: "-30 - trade_fee * 2"
+    trade_direction: "fall"
+    profit_price: "last_price - 10"
+    loss_price: "last_price + 10"
