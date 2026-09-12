@@ -3,7 +3,7 @@ from public.shared_data import get_data_cache_dir
 from git import Repo
 
 project_path = Path(get_data_cache_dir()).parent.parent
-print(project_path)
+print(f"git工作目录 >>> {project_path}")
 
 def git_push(branch="main", commit_msg="auto futures update"):
     try:
