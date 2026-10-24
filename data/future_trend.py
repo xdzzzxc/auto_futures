@@ -9,7 +9,9 @@ import akshare as ak
 from public.agent import get_headers
 from public.print_context import print_context
 from public import shared_data
+from public.shared_data import direction_dict
 from playwright.sync_api import sync_playwright, TimeoutError
+import uuid
 
 # ========== 预编译正则，性能优化 ==========
 RE_FUTURE_CN = re.compile(r"-\s*([^\s，。；]+?)期货")
@@ -31,6 +33,18 @@ FUTURES_MAP = {
     "rb": "螺纹钢", "hc": "热轧卷板", "wr": "线材", "ss": "不锈钢",
     "al": "铝", "pb": "铅", "zn": "锌", "nr": "20号胶"
 }
+
+# 品种别名扩充，提升资讯匹配命中率
+FUTURES_ALIAS = {
+    "豆粕": ["豆粕", "连粕"],
+    "玉米": ["玉米"],
+    "鸡蛋": ["鸡蛋"],
+    "甲醇": ["甲醇", "郑醇"],
+    "纯碱": ["纯碱"],
+    "PTA": ["PTA", "精对苯二甲酸"],
+    "螺纹钢": ["螺纹", "螺纹钢"]
+}
+
 CN_TO_CODE = {v: k for k, v in FUTURES_MAP.items()}
 
 # ===================== 涨跌关键词（去重，每个关键词唯一归属） =====================
@@ -41,6 +55,7 @@ TREND_KEYWORD = {
     "cautious": ["谨慎", "待定"],
     "ease": ["缓和"]
 }
+
 # 否定词：出现这些词时反转情感判断
 NEG_WORDS = {"未", "没有", "并未", "难", "难以", "不会", "不大可能"}
 
@@ -50,15 +65,14 @@ def get_code_by_cn_name(cn_name: str) -> Optional[str]:
     return CN_TO_CODE.get(cn_name, None)
 
 
-def analyze_text(title: str, cn_name: str, content: str = "") -> Optional[Tuple[str, int]]:
+def analyze_text(title: str, match_alias: str, content: str = "") -> Optional[Tuple[str, int]]:
     """
     文本情感打分，支持标题+正文；处理否定词
+    :param match_alias: 本次匹配命中的别名（不再校验cn_name，改用match_alias）
     返回 (trend_type, score) 或者None
+    所有trend返回小写：rise / fall / sideways / cautious / ease
     """
     full_text = f"{title} {content}"
-    if cn_name not in full_text:
-        return None
-
     neg_flag = any(w in full_text for w in NEG_WORDS)
     trend_score: Dict[str, int] = {k: 0 for k in TREND_KEYWORD.keys()}
 
@@ -85,12 +99,12 @@ def analyze_text(title: str, cn_name: str, content: str = "") -> Optional[Tuple[
 # ===================== 过滤字典，只保留shared_data.quote_list里面的合约key =====================
 def filter_by_white_list(src_dict: Dict[str, List[str]]) -> Dict[str, List[str]]:
     """仅保留shared_data.quote_list内的合约"""
-    keep_set = set(shared_data.quote_set)
+    keep_set = set(shared_data.quote_list)
     out = {k: v for k, v in src_dict.items() if k in keep_set}
     return out
 
 
-# ===================== 主爬取函数 =====================
+# ===================== 主爬取函数：金投网资讯 =====================
 def query_future_info(url="https://futures.cngold.org/qsyw/", headers: dict = None):
     """
     :param url: 资讯页面
@@ -134,7 +148,7 @@ def query_future_info(url="https://futures.cngold.org/qsyw/", headers: dict = No
 
     matched = {}
     # 使用shared_data.quote_list作为合约列表
-    for contract in shared_data.quote_set:
+    for contract in shared_data.quote_list:
         code_match = RE_CODE_EXTRACT.findall(contract)
         if not code_match:
             continue
@@ -142,17 +156,29 @@ def query_future_info(url="https://futures.cngold.org/qsyw/", headers: dict = No
         if code not in FUTURES_MAP:
             continue
         cn_name = FUTURES_MAP[code]
+        alias_list = FUTURES_ALIAS.get(cn_name, [cn_name])
 
         for dt, ct, tt, full in all_news:
-            res = analyze_text(tt, cn_name)
+            # 别名匹配
+            hit_alias = None
+            for alias in alias_list:
+                if alias in full:
+                    hit_alias = alias
+                    break
+            if hit_alias is None:
+                continue
+            res = analyze_text(title=tt, match_alias=hit_alias, content="")
             if res:
                 trend, _score = res
-                matched[contract] = [trend, full]
-                break
+            else:
+                trend = "sideways"
+            matched[contract] = [trend, full]
+            break
 
     return matched
 
 
+# ===================== 国泰君安资讯（Playwright） =====================
 def get_data_from_ja(fut_type=0):
     url = f"https://www.gtjaqh.com/pc/report?page=1&catType={futures_type[fut_type]}"
     text_node_name = "ListReport_list_item_text__q3vke"
@@ -174,8 +200,8 @@ def get_data_from_ja(fut_type=0):
 
     if not html:
         # 页面失败，对quote_list全部填充占位
-        for contract in shared_data.quote_set:
-            result[contract] = ["NoInfo", f"暂无国泰君安资讯 - {contract}"]
+        for contract in shared_data.quote_list:
+            result[contract] = ["noinfo", f"暂无国泰君安资讯 - {contract}"]
         end_time = time.time()
         print_context(f"获取国泰君安期货资讯耗时：{end_time - start_time:.2f}秒。")
         return result
@@ -200,7 +226,9 @@ def get_data_from_ja(fut_type=0):
 
     # 解析资讯：遍历配置的完整合约，提取短码匹配中文名称
     for content_text, pub_time in valid_bundle:
-        for contract in shared_data.quote_set:
+        for contract in shared_data.quote_list:
+            if contract in result:
+                continue
             code_match = RE_CODE_EXTRACT.findall(contract)
             if not code_match:
                 continue
@@ -208,46 +236,69 @@ def get_data_from_ja(fut_type=0):
             cn_name = FUTURES_MAP.get(code)
             if not cn_name:
                 continue
-            if cn_name in content_text:
-                ana_ret = analyze_text(title=content_text, cn_name=cn_name, content="")
-                if ana_ret is not None:
-                    trend, _score = ana_ret
-                else:
-                    trend = "Sideways"
-                out_text = f"国泰君安简讯 - {pub_time} - {content_text}"
-                result[contract] = [trend, out_text]
+            alias_list = FUTURES_ALIAS.get(cn_name, [cn_name])
+            hit_alias = None
+            for alias in alias_list:
+                if alias in content_text:
+                    hit_alias = alias
+                    break
+            if hit_alias is None:
+                continue
+            ana_ret = analyze_text(title=content_text, match_alias=hit_alias, content="")
+            if ana_ret is not None:
+                trend, _score = ana_ret
+            else:
+                trend = "sideways"
+            out_text = f"国泰君安简讯 - {pub_time} - {content_text}"
+            result[contract] = [trend, out_text]
 
     # 补齐quote_list全部占位
-    for contract in shared_data.quote_set:
+    for contract in shared_data.quote_list:
         if contract and contract not in result:
-            result[contract] = ["NoInfo", f"暂无国泰君安资讯 - {contract}"]
+            result[contract] = ["noinfo", f"暂无国泰君安资讯 - {contract}"]
 
     end_time = time.time()
     print_context(f"获取国泰君安期货资讯耗时：{end_time - start_time:.2f}秒。")
     return result
 
 
+# ===================== 三路资讯合并函数 =====================
 def merge_two_info_dict() -> Dict[str, List[str]]:
     """
-    合并两个资讯字典，不覆盖；同key时text用；拼接
-    dict_a：金投网资讯（优先保留它的trend）
-    dict_b：国泰君安资讯
+    三路资讯合并：金投网 + 国泰君安 + 东财快讯
+    优先级：金投原始trend优先；东财如果不是noinfo，覆盖trend；文本全部拼接
+    返回格式：{合约: [trend, 合并文本]}
+    trend全部小写 rise/fall/sideways/cautious/ease/noinfo
     """
-    dict_a = query_future_info()
-    dict_b = get_data_from_ja()
+    dict_a = query_future_info()        # 金投网
+    dict_b = get_data_from_ja()         # 国泰君安
+
     merged = dict(dict_a)
+
+    # 合并国泰君安
     for k, (trend_b, text_b) in dict_b.items():
         if k in merged:
             trend_a, text_a = merged[k]
             merged[k] = [trend_a, f"{text_a}；{text_b}"]
         else:
             merged[k] = [trend_b, text_b]
+
     merged = filter_by_white_list(merged)
+    for k, v in merged.items():
+        if v[0] == "noinfo":
+            direction_dict[k] = "sideways"
+        else:
+            direction_dict[k] = v[0]
+    print(f"查询品种走势结果（字典数据）: {direction_dict}")
     return merged
 
 
 # ===================== 测试运行 =====================
 if __name__ == "__main__":
     # 测试时手动给quote_list赋值，正式运行由公共模块初始化
-    ja_data = merge_two_info_dict()
-    print(ja_data)
+    shared_data.quote_list = ["m2611", "c2611", "jd2611", "ma2611", "sa2611", "ta2611", "rb2611"]
+    # res = get_data_from_em()
+    # print(res)
+    # # print(query_future_info())
+    # # print("-"*50)
+    print(merge_two_info_dict())

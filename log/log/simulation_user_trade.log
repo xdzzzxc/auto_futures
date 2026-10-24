@@ -50323,3 +50323,674 @@ Traceback (most recent call last):
   File "E:\auto_futures\core\trade.py", line 264, in get_market_ctx
     print(f"  {en_k:>24s}   {zh_k:<15s}{zh_v:<}")
 TypeError: unsupported format string passed to NoneType.__format__
+2026-09-16 08:53:09 - simulation_user - INFO - trade_log.py[183] <module> - trace_id=T20260916001 - 策略信号触发，contract=m2611 volume=1
+2026-09-16 08:53:09 - simulation_user - ERROR - trade_log.py[187] <module> - trace_id=T20260916001 - 执行发生异常
+Traceback (most recent call last):
+  File "E:\auto_futures\log\trade_log.py", line 185, in <module>
+    1 / 0
+ZeroDivisionError: division by zero
+2026-09-16 08:53:09 - simulation_user - INFO - trade_log.py[190] <module> - trace_id=- - 普通日志，不带trace_id
+2026-09-16 09:13:02 - simulation_user - INFO - trade_log.py[183] <module> - trace_id=T20260916001 - 策略信号触发，contract=m2611 volume=1
+2026-09-16 09:13:02 - simulation_user - ERROR - trade_log.py[187] <module> - trace_id=T20260916001 - 执行发生异常
+Traceback (most recent call last):
+  File "E:\auto_futures\log\trade_log.py", line 185, in <module>
+    1 / 0
+ZeroDivisionError: division by zero
+2026-09-16 09:13:02 - simulation_user - INFO - trade_log.py[190] <module> - trace_id=- - 普通日志，不带trace_id
+2026-09-16 10:55:57 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-16 13:16:02 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-17 08:45:46 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-17 09:48:55 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-17 10:46:33 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-17 14:15:46 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-17 14:16:19 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-17 14:52:10 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-17 20:22:42 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-17 22:56:07 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-18 08:59:27 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-18 09:08:54 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-18 09:25:26 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-18 09:40:45 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-18 10:02:31 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-18 13:17:32 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-18 13:29:17 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-18 13:35:09 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-21 08:52:45 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-21 08:58:09 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-21 09:39:59 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-21 11:47:00 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-22 08:43:11 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-22 21:39:45 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-22 22:06:42 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-23 09:07:25 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-23 10:18:19 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-23 10:41:01 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-23 10:50:16 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-23 11:08:51 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-23 12:26:59 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-23 17:16:25 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-23 22:19:23 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-24 08:46:49 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-24 09:34:38 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-24 09:57:38 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-24 19:20:00 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-25 14:33:26 - simulation_user - INFO - main.py[343] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-25 16:48:11 - simulation_user - INFO - main.py[346] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-25 17:02:30 - simulation_user - INFO - main.py[346] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-25 17:02:50 - simulation_user - INFO - main.py[346] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-25 17:04:39 - simulation_user - INFO - main.py[344] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-29 08:09:48 - simulation_user - INFO - main.py[344] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-29 08:21:20 - simulation_user - CRITICAL - main.py[35] global_exception_handler - trace_id=- - 【全局未捕获异常】程序崩溃
+Traceback (most recent call last):
+  File "E:\auto_futures\main.py", line 419, in <module>
+    main()
+  File "E:\auto_futures\main.py", line 389, in main
+    init_shared_data(user_type=0, target_days=20, lot_size=1, get_price_interval=5)
+  File "E:\auto_futures\main.py", line 356, in init_shared_data
+    check_ths_status()  # 检查同花顺期货通启动状态
+  File "E:\auto_futures\core\connect_ths.py", line 230, in check_ths_status
+    auto_login(ths_window=window)
+  File "E:\auto_futures\core\connect_ths.py", line 168, in auto_login
+    shared_data.login_control['选择用户'] = [edit_ctrls[0], edit_ctrls[0].rectangle()]
+IndexError: list index out of range
+2026-09-29 08:23:28 - simulation_user - INFO - main.py[346] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-29 08:44:58 - simulation_user - INFO - main.py[346] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-29 08:49:23 - simulation_user - CRITICAL - main.py[36] global_exception_handler - trace_id=- - 【全局未捕获异常】程序崩溃
+Traceback (most recent call last):
+  File "E:\auto_futures\main.py", line 421, in <module>
+    main()
+  File "E:\auto_futures\main.py", line 391, in main
+    init_shared_data(user_type=0, target_days=20, lot_size=1, get_price_interval=5)
+  File "E:\auto_futures\main.py", line 358, in init_shared_data
+    check_ths_status()  # 检查同花顺期货通启动状态
+  File "E:\auto_futures\core\connect_ths.py", line 260, in check_ths_status
+    local_control()
+  File "E:\auto_futures\core\connect_ths.py", line 274, in local_control
+    app = Application(backend="uia").connect(title_re=r".*同花顺期货通.*", timeout=3)
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 990, in connect
+    self.process = timings.wait_until_passes(
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\timings.py", line 436, in wait_until_passes
+    func_val = func(*args, **kwargs)
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\findwindows.py", line 98, in find_element
+    raise exception
+pywinauto.findwindows.ElementAmbiguousError: There are 2 elements that match the criteria {'title_re': '.*同花顺期货通.*', 'backend': 'uia', 'visible_only': False}
+2026-09-29 09:04:22 - simulation_user - INFO - main.py[346] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-29 09:07:22 - simulation_user - INFO - main.py[346] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-29 09:10:40 - simulation_user - CRITICAL - main.py[36] global_exception_handler - trace_id=- - 【全局未捕获异常】程序崩溃
+Traceback (most recent call last):
+  File "E:\auto_futures\main.py", line 421, in <module>
+    main()
+  File "E:\auto_futures\main.py", line 391, in main
+    init_shared_data(user_type=0, target_days=20, lot_size=1, get_price_interval=5)
+  File "E:\auto_futures\main.py", line 358, in init_shared_data
+    check_ths_status()  # 检查同花顺期货通启动状态
+  File "E:\auto_futures\core\connect_ths.py", line 257, in check_ths_status
+    local_control()
+  File "E:\auto_futures\core\connect_ths.py", line 277, in local_control
+    app = Application(backend="uia").connect(title_re=r".*同花顺期货通.*", timeout=3)
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 990, in connect
+    self.process = timings.wait_until_passes(
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\timings.py", line 436, in wait_until_passes
+    func_val = func(*args, **kwargs)
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\findwindows.py", line 98, in find_element
+    raise exception
+pywinauto.findwindows.ElementAmbiguousError: There are 2 elements that match the criteria {'title_re': '.*同花顺期货通.*', 'backend': 'uia', 'visible_only': False}
+2026-09-29 09:11:06 - simulation_user - INFO - main.py[346] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-29 09:15:29 - simulation_user - CRITICAL - main.py[36] global_exception_handler - trace_id=- - 【全局未捕获异常】程序崩溃
+Traceback (most recent call last):
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 250, in __resolve_control
+    ctrl = wait_until_passes(
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\timings.py", line 458, in wait_until_passes
+    raise err
+pywinauto.timings.TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "E:\auto_futures\main.py", line 421, in <module>
+    main()
+  File "E:\auto_futures\main.py", line 391, in main
+    init_shared_data(user_type=0, target_days=20, lot_size=1, get_price_interval=5)
+  File "E:\auto_futures\main.py", line 358, in init_shared_data
+    check_ths_status()  # 检查同花顺期货通启动状态
+  File "E:\auto_futures\core\connect_ths.py", line 230, in check_ths_status
+    auto_login(ths_window=window)
+  File "E:\auto_futures\core\connect_ths.py", line 127, in auto_login
+    user_type_btn, user_type_btn.rectangle()]
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 379, in __getattribute__
+    ctrls = self.__resolve_control(self.criteria)
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 261, in __resolve_control
+    raise e.original_exception
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\timings.py", line 436, in wait_until_passes
+    func_val = func(*args, **kwargs)
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 222, in __get_ctrl
+    ctrl = self.backend.generic_wrapper_class(findwindows.find_element(**ctrl_criteria))
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\findwindows.py", line 87, in find_element
+    raise ElementNotFoundError(kwargs)
+pywinauto.findwindows.ElementNotFoundError: {'control_type': 'Button', 'title_re': '期货户|期货用户', 'top_level_only': False, 'parent': <uia_element_info.UIAElementInfo - '同花顺期货通自动化操作 - 豆包', Chrome_WidgetWin_1, 66986>, 'backend': 'uia'}
+2026-09-29 09:21:35 - simulation_user - INFO - main.py[346] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-29 09:26:51 - simulation_user - CRITICAL - main.py[36] global_exception_handler - trace_id=- - 【全局未捕获异常】程序崩溃
+Traceback (most recent call last):
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 250, in __resolve_control
+    ctrl = wait_until_passes(
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\timings.py", line 458, in wait_until_passes
+    raise err
+pywinauto.timings.TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "E:\auto_futures\main.py", line 421, in <module>
+    main()
+  File "E:\auto_futures\main.py", line 391, in main
+    init_shared_data(user_type=0, target_days=20, lot_size=1, get_price_interval=5)
+  File "E:\auto_futures\main.py", line 358, in init_shared_data
+    check_ths_status()  # 检查同花顺期货通启动状态
+  File "E:\auto_futures\core\connect_ths.py", line 230, in check_ths_status
+    auto_login(ths_window=window)
+  File "E:\auto_futures\core\connect_ths.py", line 127, in auto_login
+    user_type_btn, user_type_btn.rectangle()]
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 379, in __getattribute__
+    ctrls = self.__resolve_control(self.criteria)
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 261, in __resolve_control
+    raise e.original_exception
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\timings.py", line 436, in wait_until_passes
+    func_val = func(*args, **kwargs)
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 222, in __get_ctrl
+    ctrl = self.backend.generic_wrapper_class(findwindows.find_element(**ctrl_criteria))
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\findwindows.py", line 87, in find_element
+    raise ElementNotFoundError(kwargs)
+pywinauto.findwindows.ElementNotFoundError: {'control_type': 'Button', 'title_re': '期货户|期货用户', 'top_level_only': False, 'parent': <uia_element_info.UIAElementInfo - '同花顺期货通自动化操作 - 豆包', Chrome_WidgetWin_1, 66986>, 'backend': 'uia'}
+2026-09-29 09:31:00 - simulation_user - INFO - main.py[346] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-29 09:43:43 - simulation_user - CRITICAL - main.py[36] global_exception_handler - trace_id=- - 【全局未捕获异常】程序崩溃
+Traceback (most recent call last):
+  File "E:\auto_futures\main.py", line 421, in <module>
+    main()
+  File "E:\auto_futures\main.py", line 391, in main
+    init_shared_data(user_type=0, target_days=20, lot_size=1, get_price_interval=5)
+  File "E:\auto_futures\main.py", line 358, in init_shared_data
+    check_ths_status()  # 检查同花顺期货通启动状态
+  File "E:\auto_futures\core\connect_ths.py", line 247, in check_ths_status
+    local_control()
+  File "E:\auto_futures\core\connect_ths.py", line 277, in local_control
+    app = Application(backend="uia").connect(title_re=r".*同花顺期货通.*", timeout=3)
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 990, in connect
+    self.process = timings.wait_until_passes(
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\timings.py", line 436, in wait_until_passes
+    func_val = func(*args, **kwargs)
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\findwindows.py", line 98, in find_element
+    raise exception
+pywinauto.findwindows.ElementAmbiguousError: There are 2 elements that match the criteria {'title_re': '.*同花顺期货通.*', 'backend': 'uia', 'visible_only': False}
+2026-09-30 08:33:46 - simulation_user - INFO - main.py[346] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-30 09:47:44 - simulation_user - INFO - main.py[346] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-30 10:07:32 - simulation_user - INFO - main.py[346] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-30 10:21:03 - simulation_user - INFO - main.py[346] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-30 20:25:23 - simulation_user - INFO - main.py[348] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-30 20:36:36 - simulation_user - INFO - main.py[348] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-30 20:54:45 - simulation_user - INFO - main.py[348] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-30 20:57:41 - simulation_user - INFO - main.py[348] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-09-30 21:05:52 - simulation_user - INFO - main.py[348] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-01 08:35:14 - simulation_user - INFO - main.py[348] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-02 09:39:04 - simulation_user - INFO - main.py[348] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-02 11:24:32 - simulation_user - INFO - main.py[348] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-02 11:30:17 - simulation_user - INFO - main.py[348] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-02 11:34:57 - simulation_user - INFO - main.py[348] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-02 12:11:46 - simulation_user - INFO - main.py[348] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-02 12:22:52 - simulation_user - INFO - main.py[348] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-02 12:31:27 - simulation_user - INFO - main.py[348] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-02 12:36:17 - simulation_user - INFO - main.py[348] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-02 12:37:45 - simulation_user - INFO - main.py[348] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-02 12:40:41 - simulation_user - INFO - main.py[348] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-02 12:56:09 - simulation_user - INFO - main.py[348] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-02 13:00:19 - simulation_user - INFO - main.py[348] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-03 16:47:19 - simulation_user - INFO - test.py[357] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-03 16:47:20 - simulation_user - CRITICAL - test.py[37] global_exception_handler - trace_id=- - 【全局未捕获异常】程序崩溃
+Traceback (most recent call last):
+  File "E:\auto_futures\test.py", line 430, in <module>
+    main()
+  File "E:\auto_futures\test.py", line 393, in main
+    init_shared_data(user_type=0, target_days=20, get_price_interval=5)
+  File "E:\auto_futures\test.py", line 358, in init_shared_data
+    select_future()  # 选择交易的期货品种
+  File "E:\auto_futures\test.py", line 149, in select_future
+    futures_info_dict = merge_two_info_dict()
+  File "E:\auto_futures\data\future_trend.py", line 236, in merge_two_info_dict
+    dict_a = query_future_info()
+  File "E:\auto_futures\data\future_trend.py", line 137, in query_future_info
+    for contract in shared_data.quote_set:
+AttributeError: module 'public.shared_data' has no attribute 'quote_set'
+2026-10-03 16:52:57 - simulation_user - INFO - test.py[357] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-03 16:52:58 - simulation_user - CRITICAL - test.py[37] global_exception_handler - trace_id=- - 【全局未捕获异常】程序崩溃
+Traceback (most recent call last):
+  File "E:\auto_futures\test.py", line 430, in <module>
+    main()
+  File "E:\auto_futures\test.py", line 393, in main
+    init_shared_data(user_type=0, target_days=20, get_price_interval=5)
+  File "E:\auto_futures\test.py", line 358, in init_shared_data
+    select_future()  # 选择交易的期货品种
+  File "E:\auto_futures\test.py", line 149, in select_future
+    futures_info_dict = merge_two_info_dict()
+  File "E:\auto_futures\data\future_trend.py", line 236, in merge_two_info_dict
+    dict_a = query_future_info()
+  File "E:\auto_futures\data\future_trend.py", line 137, in query_future_info
+    for contract in shared_data.quote_set:
+AttributeError: module 'public.shared_data' has no attribute 'quote_set'
+2026-10-03 16:56:54 - simulation_user - INFO - main.py[357] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-03 17:30:11 - simulation_user - INFO - main.py[357] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-03 17:31:39 - simulation_user - INFO - main.py[357] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-03 17:33:00 - simulation_user - INFO - main.py[357] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-06 10:03:13 - simulation_user - INFO - main.py[357] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-07 11:39:43 - simulation_user - INFO - main.py[357] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-07 11:50:38 - simulation_user - INFO - main.py[357] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-07 11:58:35 - simulation_user - INFO - main.py[357] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-07 16:43:01 - simulation_user - INFO - main.py[358] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-07 17:18:16 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-07 17:49:55 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-07 18:04:08 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-07 18:05:12 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-07 18:10:33 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-07 19:51:41 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-07 20:04:19 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-07 20:12:38 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-07 20:14:35 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-07 20:49:17 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-07 21:14:16 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-07 21:15:12 - simulation_user - CRITICAL - main.py[39] global_exception_handler - trace_id=- - 【全局未捕获异常】程序崩溃
+Traceback (most recent call last):
+  File "E:\auto_futures\.venv\lib\site-packages\urllib3\connectionpool.py", line 788, in urlopen
+    response = self._make_request(
+  File "E:\auto_futures\.venv\lib\site-packages\urllib3\connectionpool.py", line 534, in _make_request
+    response = conn.getresponse()
+  File "E:\auto_futures\.venv\lib\site-packages\urllib3\connection.py", line 571, in getresponse
+    httplib_response = super().getresponse()
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1374, in getresponse
+    response.begin()
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 318, in begin
+    version, status, reason = self._read_status()
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 287, in _read_status
+    raise RemoteDisconnected("Remote end closed connection without"
+http.client.RemoteDisconnected: Remote end closed connection without response
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "E:\auto_futures\.venv\lib\site-packages\requests\adapters.py", line 645, in send
+    resp = conn.urlopen(
+  File "E:\auto_futures\.venv\lib\site-packages\urllib3\connectionpool.py", line 842, in urlopen
+    retries = retries.increment(
+  File "E:\auto_futures\.venv\lib\site-packages\urllib3\util\retry.py", line 498, in increment
+    raise reraise(type(error), error, _stacktrace)
+  File "E:\auto_futures\.venv\lib\site-packages\urllib3\util\util.py", line 38, in reraise
+    raise value.with_traceback(tb)
+  File "E:\auto_futures\.venv\lib\site-packages\urllib3\connectionpool.py", line 788, in urlopen
+    response = self._make_request(
+  File "E:\auto_futures\.venv\lib\site-packages\urllib3\connectionpool.py", line 534, in _make_request
+    response = conn.getresponse()
+  File "E:\auto_futures\.venv\lib\site-packages\urllib3\connection.py", line 571, in getresponse
+    httplib_response = super().getresponse()
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 1374, in getresponse
+    response.begin()
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 318, in begin
+    version, status, reason = self._read_status()
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 287, in _read_status
+    raise RemoteDisconnected("Remote end closed connection without"
+urllib3.exceptions.ProtocolError: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "E:\auto_futures\data\get_quote.py", line 182, in get_open_price
+    res = requests.get(
+  File "E:\auto_futures\.venv\lib\site-packages\requests\api.py", line 73, in get
+    return request("get", url, params=params, **kwargs)
+  File "E:\auto_futures\.venv\lib\site-packages\requests\api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+  File "E:\auto_futures\.venv\lib\site-packages\requests\sessions.py", line 592, in request
+    resp = self.send(prep, **send_kwargs)
+  File "E:\auto_futures\.venv\lib\site-packages\requests\sessions.py", line 706, in send
+    r = adapter.send(request, **kwargs)
+  File "E:\auto_futures\.venv\lib\site-packages\requests\adapters.py", line 660, in send
+    raise ConnectionError(err, request=request)
+requests.exceptions.ConnectionError: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "E:\auto_futures\main.py", line 435, in <module>
+    main()
+  File "E:\auto_futures\main.py", line 426, in main
+    get_open_price()  # 开始获取交易品种的当日开盘信息
+  File "E:\auto_futures\data\get_quote.py", line 68, in get_open_price
+    sub_res = get_open_price(ts_code=code, url=url)
+  File "E:\auto_futures\data\get_quote.py", line 273, in get_open_price
+    print_context(f"🌙夜盘模式，手动输入，额外生成交易日缓存：{trade_cache_file}")
+TypeError: 'module' object is not callable
+2026-10-07 21:18:11 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-07 21:58:47 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-07 22:02:25 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-08 09:16:11 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-08 09:40:33 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-08 11:03:10 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-09 09:56:21 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-09 13:50:43 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-09 15:27:28 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-09 15:36:53 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-09 15:56:02 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-09 17:14:09 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-09 17:29:43 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-09 17:30:55 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-09 17:54:54 - simulation_user - CRITICAL - main.py[39] global_exception_handler - trace_id=- - 【全局未捕获异常】程序崩溃
+Traceback (most recent call last):
+  File "E:\auto_futures\main.py", line 444, in <module>
+    main()
+  File "E:\auto_futures\main.py", line 403, in main
+    init_shared_data(user_type=0,
+  File "E:\auto_futures\main.py", line 376, in init_shared_data
+    check_ths_status()  # 检查同花顺期货通启动状态
+  File "E:\auto_futures\core\connect_ths.py", line 230, in check_ths_status
+    auto_login(ths_window=window)
+  File "E:\auto_futures\core\connect_ths.py", line 163, in auto_login
+    raise RuntimeError("等待【同花顺期货通交易】登录窗口超时，未检测到弹窗")
+RuntimeError: 等待【同花顺期货通交易】登录窗口超时，未检测到弹窗
+2026-10-09 21:35:04 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-09 21:44:42 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-09 21:48:03 - simulation_user - CRITICAL - main.py[39] global_exception_handler - trace_id=- - 【全局未捕获异常】程序崩溃
+Traceback (most recent call last):
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 250, in __resolve_control
+    ctrl = wait_until_passes(
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\timings.py", line 458, in wait_until_passes
+    raise err
+pywinauto.timings.TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "E:\auto_futures\main.py", line 444, in <module>
+    main()
+  File "E:\auto_futures\main.py", line 403, in main
+    init_shared_data(user_type=0,
+  File "E:\auto_futures\main.py", line 376, in init_shared_data
+    check_ths_status()  # 检查同花顺期货通启动状态
+  File "E:\auto_futures\core\connect_ths.py", line 238, in check_ths_status
+    auto_login(ths_window=window)
+  File "E:\auto_futures\core\connect_ths.py", line 127, in auto_login
+    user_type_btn, user_type_btn.rectangle()]
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 379, in __getattribute__
+    ctrls = self.__resolve_control(self.criteria)
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 261, in __resolve_control
+    raise e.original_exception
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\timings.py", line 436, in wait_until_passes
+    func_val = func(*args, **kwargs)
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 222, in __get_ctrl
+    ctrl = self.backend.generic_wrapper_class(findwindows.find_element(**ctrl_criteria))
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\findwindows.py", line 87, in find_element
+    raise ElementNotFoundError(kwargs)
+pywinauto.findwindows.ElementNotFoundError: {'control_type': 'Button', 'title_re': '期货户|期货用户', 'top_level_only': False, 'parent': <uia_element_info.UIAElementInfo - '同花顺期货通自动化操作 - 豆包', Chrome_WidgetWin_1, 1967318>, 'backend': 'uia'}
+2026-10-09 21:51:25 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-09 21:55:15 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-09 22:00:19 - simulation_user - CRITICAL - main.py[39] global_exception_handler - trace_id=- - 【全局未捕获异常】程序崩溃
+Traceback (most recent call last):
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 250, in __resolve_control
+    ctrl = wait_until_passes(
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\timings.py", line 458, in wait_until_passes
+    raise err
+pywinauto.timings.TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "E:\auto_futures\main.py", line 444, in <module>
+    main()
+  File "E:\auto_futures\main.py", line 403, in main
+    init_shared_data(user_type=0,
+  File "E:\auto_futures\main.py", line 376, in init_shared_data
+    check_ths_status()  # 检查同花顺期货通启动状态
+  File "E:\auto_futures\core\connect_ths.py", line 238, in check_ths_status
+    auto_login(ths_window=window)
+  File "E:\auto_futures\core\connect_ths.py", line 127, in auto_login
+    user_type_btn, user_type_btn.rectangle()]
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 379, in __getattribute__
+    ctrls = self.__resolve_control(self.criteria)
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 261, in __resolve_control
+    raise e.original_exception
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\timings.py", line 436, in wait_until_passes
+    func_val = func(*args, **kwargs)
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 222, in __get_ctrl
+    ctrl = self.backend.generic_wrapper_class(findwindows.find_element(**ctrl_criteria))
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\findwindows.py", line 87, in find_element
+    raise ElementNotFoundError(kwargs)
+pywinauto.findwindows.ElementNotFoundError: {'control_type': 'Button', 'title_re': '期货户|期货用户', 'top_level_only': False, 'parent': <uia_element_info.UIAElementInfo - '同花顺期货通自动化操作 - 豆包', Chrome_WidgetWin_1, 1967318>, 'backend': 'uia'}
+2026-10-09 22:05:30 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-09 22:08:43 - simulation_user - CRITICAL - main.py[39] global_exception_handler - trace_id=- - 【全局未捕获异常】程序崩溃
+Traceback (most recent call last):
+  File "E:\auto_futures\main.py", line 444, in <module>
+    main()
+  File "E:\auto_futures\main.py", line 403, in main
+    init_shared_data(user_type=0,
+  File "E:\auto_futures\main.py", line 376, in init_shared_data
+    check_ths_status()  # 检查同花顺期货通启动状态
+  File "E:\auto_futures\core\connect_ths.py", line 237, in check_ths_status
+    window = start_ths()
+  File "E:\auto_futures\core\connect_ths.py", line 98, in start_ths
+    raise RuntimeError(f"连接同花顺窗口超时，已重试{max_try_counts}次，请检查程序是否正常启动")
+RuntimeError: 连接同花顺窗口超时，已重试3次，请检查程序是否正常启动
+2026-10-09 22:17:38 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-09 22:47:43 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-09 22:53:54 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-09 23:57:38 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-10 00:00:47 - simulation_user - CRITICAL - main.py[39] global_exception_handler - trace_id=- - 【全局未捕获异常】程序崩溃
+Traceback (most recent call last):
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 250, in __resolve_control
+    ctrl = wait_until_passes(
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\timings.py", line 458, in wait_until_passes
+    raise err
+pywinauto.timings.TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "E:\auto_futures\main.py", line 444, in <module>
+    main()
+  File "E:\auto_futures\main.py", line 403, in main
+    init_shared_data(user_type=0,
+  File "E:\auto_futures\main.py", line 376, in init_shared_data
+    check_ths_status()  # 检查同花顺期货通启动状态
+  File "E:\auto_futures\core\connect_ths.py", line 251, in check_ths_status
+    qhh_btn_enabled = qhh_btn.is_enabled()
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 379, in __getattribute__
+    ctrls = self.__resolve_control(self.criteria)
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 261, in __resolve_control
+    raise e.original_exception
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\timings.py", line 436, in wait_until_passes
+    func_val = func(*args, **kwargs)
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 203, in __get_ctrl
+    dialog = self.backend.generic_wrapper_class(findwindows.find_element(**criteria[0]))
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\findwindows.py", line 87, in find_element
+    raise ElementNotFoundError(kwargs)
+pywinauto.findwindows.ElementNotFoundError: {'control_type': 'Window', 'visible_only': False, 'backend': 'uia', 'process': 9384}
+2026-10-10 00:08:48 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-10 07:38:38 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-10 08:02:53 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-10 08:02:57 - simulation_user - CRITICAL - main.py[39] global_exception_handler - trace_id=- - 【全局未捕获异常】程序崩溃
+Traceback (most recent call last):
+  File "E:\auto_futures\main.py", line 444, in <module>
+    main()
+  File "E:\auto_futures\main.py", line 403, in main
+    init_shared_data(user_type=0,
+  File "E:\auto_futures\main.py", line 376, in init_shared_data
+    check_ths_status()  # 检查同花顺期货通启动状态
+  File "E:\auto_futures\core\connect_ths.py", line 265, in check_ths_status
+    local_control()
+  File "E:\auto_futures\core\connect_ths.py", line 303, in local_control
+    time.sleep(2.0)
+UnboundLocalError: local variable 'time' referenced before assignment
+2026-10-10 08:04:39 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-10 08:04:45 - simulation_user - CRITICAL - main.py[39] global_exception_handler - trace_id=- - 【全局未捕获异常】程序崩溃
+Traceback (most recent call last):
+  File "E:\auto_futures\main.py", line 444, in <module>
+    main()
+  File "E:\auto_futures\main.py", line 403, in main
+    init_shared_data(user_type=0,
+  File "E:\auto_futures\main.py", line 376, in init_shared_data
+    check_ths_status()  # 检查同花顺期货通启动状态
+  File "E:\auto_futures\core\connect_ths.py", line 265, in check_ths_status
+    local_control()
+  File "E:\auto_futures\core\connect_ths.py", line 311, in local_control
+    all_ctrls = ths_window.descendants(visible_only=True)
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\base_wrapper.py", line 492, in descendants
+    desc_elements = self.element_info.descendants(**kwargs)
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\uia_element_info.py", line 306, in descendants
+    cond = IUIA().build_condition(**kwargs)
+TypeError: IUIA.build_condition() got an unexpected keyword argument 'visible_only'
+2026-10-10 08:51:01 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-10 14:19:31 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-10 14:22:26 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-10 16:40:53 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-10 16:48:54 - simulation_user - INFO - main.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-10 17:13:37 - simulation_user - INFO - main.py[104] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-10 21:13:55 - simulation_user - INFO - main.py[104] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-10 21:14:03 - simulation_user - CRITICAL - main.py[38] global_exception_handler - trace_id=- - 【全局未捕获异常】程序崩溃
+Traceback (most recent call last):
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 250, in __resolve_control
+    ctrl = wait_until_passes(
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\timings.py", line 458, in wait_until_passes
+    raise err
+pywinauto.timings.TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "E:\auto_futures\main.py", line 206, in <module>
+    main()
+  File "E:\auto_futures\main.py", line 155, in main
+    init_shared_data(user_type=0,
+  File "E:\auto_futures\main.py", line 122, in init_shared_data
+    check_ths_status()  # 检查同花顺期货通启动状态
+  File "E:\auto_futures\core\connect_ths.py", line 249, in check_ths_status
+    ths_window.set_focus()
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 396, in __getattribute__
+    ctrls = self.__resolve_control(self.criteria)
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 261, in __resolve_control
+    raise e.original_exception
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\timings.py", line 436, in wait_until_passes
+    func_val = func(*args, **kwargs)
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 203, in __get_ctrl
+    dialog = self.backend.generic_wrapper_class(findwindows.find_element(**criteria[0]))
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\findwindows.py", line 87, in find_element
+    raise ElementNotFoundError(kwargs)
+pywinauto.findwindows.ElementNotFoundError: {'control_type': 'Window', 'visible_only': False, 'backend': 'uia', 'process': 4972}
+2026-10-10 21:39:01 - simulation_user - INFO - main.py[104] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-10 21:39:58 - simulation_user - CRITICAL - main.py[38] global_exception_handler - trace_id=- - 【全局未捕获异常】程序崩溃
+Traceback (most recent call last):
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 250, in __resolve_control
+    ctrl = wait_until_passes(
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\timings.py", line 458, in wait_until_passes
+    raise err
+pywinauto.timings.TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "E:\auto_futures\core\connect_ths.py", line 273, in check_ths_status
+    ths_window.set_focus()
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 396, in __getattribute__
+    ctrls = self.__resolve_control(self.criteria)
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 261, in __resolve_control
+    raise e.original_exception
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\timings.py", line 436, in wait_until_passes
+    func_val = func(*args, **kwargs)
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 203, in __get_ctrl
+    dialog = self.backend.generic_wrapper_class(findwindows.find_element(**criteria[0]))
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\findwindows.py", line 87, in find_element
+    raise ElementNotFoundError(kwargs)
+pywinauto.findwindows.ElementNotFoundError: {'control_type': 'Window', 'visible_only': False, 'backend': 'uia', 'process': 4972}
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "E:\auto_futures\main.py", line 206, in <module>
+    main()
+  File "E:\auto_futures\main.py", line 155, in main
+    init_shared_data(user_type=0,
+  File "E:\auto_futures\main.py", line 122, in init_shared_data
+    check_ths_status()  # 检查同花顺期货通启动状态
+  File "E:\auto_futures\core\connect_ths.py", line 280, in check_ths_status
+    ths_window = app.window(control_type="Window", backend="uia")
+  File "E:\auto_futures\.venv\lib\site-packages\pywinauto\application.py", line 1222, in window
+    raise ValueError('Using another backend than set in the app constructor is not allowed!')
+ValueError: Using another backend than set in the app constructor is not allowed!
+2026-10-10 21:43:44 - simulation_user - INFO - main.py[104] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-10 22:12:16 - simulation_user - INFO - auto_run.py[362] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-12 08:43:05 - simulation_user - INFO - main.py[104] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-12 09:24:48 - simulation_user - INFO - main.py[104] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-13 08:21:38 - simulation_user - INFO - main.py[104] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-13 13:15:34 - simulation_user - INFO - main.py[104] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-14 08:25:48 - simulation_user - INFO - main.py[365] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-14 11:29:11 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-14 11:59:32 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-14 17:19:01 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-15 08:33:09 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-15 14:31:29 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-15 20:19:25 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-15 20:52:04 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-16 10:47:47 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-16 18:18:28 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-17 00:55:51 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-17 01:07:52 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-17 01:13:58 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-17 01:31:20 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-17 01:59:28 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-17 02:00:24 - simulation_user - CRITICAL - main.py[38] global_exception_handler - trace_id=- - 【全局未捕获异常】程序崩溃
+Traceback (most recent call last):
+  File "E:\auto_futures\main.py", line 467, in <module>
+    main()
+  File "E:\auto_futures\main.py", line 416, in main
+    init_shared_data(user_type=0,
+  File "E:\auto_futures\main.py", line 384, in init_shared_data
+    check_ths_status()  # 检查同花顺期货通启动状态
+  File "E:\auto_futures\core\connect_ths.py", line 260, in check_ths_status
+    window = start_ths()
+  File "E:\auto_futures\core\connect_ths.py", line 121, in start_ths
+    raise RuntimeError(f"连接同花顺窗口超时，已重试{max_try_counts}次，请检查程序是否正常启动")
+RuntimeError: 连接同花顺窗口超时，已重试3次，请检查程序是否正常启动
+2026-10-17 02:00:52 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-17 02:03:58 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-19 07:52:35 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-19 09:15:48 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-19 11:12:31 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-19 12:10:42 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-19 20:25:49 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-19 20:31:59 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-19 20:57:05 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-19 22:02:53 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-19 22:40:16 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-19 22:57:06 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-20 08:50:07 - simulation_user - INFO - main.py[366] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-20 10:59:22 - simulation_user - INFO - main.py[370] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-20 11:01:43 - simulation_user - INFO - main.py[370] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-20 11:02:39 - simulation_user - INFO - main.py[370] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-20 11:17:04 - simulation_user - INFO - main.py[370] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-20 13:20:39 - simulation_user - INFO - main.py[370] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-20 21:09:39 - simulation_user - INFO - main.py[370] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-20 22:26:07 - simulation_user - INFO - main.py[370] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-21 08:52:06 - simulation_user - INFO - main.py[370] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-21 13:53:11 - simulation_user - INFO - main.py[370] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-21 15:18:33 - simulation_user - INFO - main.py[370] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-21 19:20:32 - simulation_user - INFO - main.py[370] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-22 09:24:21 - simulation_user - INFO - main.py[370] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-22 10:24:17 - simulation_user - INFO - main.py[370] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-22 11:06:48 - simulation_user - INFO - main.py[370] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-22 11:07:33 - simulation_user - INFO - main.py[370] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-22 11:26:22 - simulation_user - INFO - main.py[370] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-22 12:45:43 - simulation_user - INFO - main.py[370] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-22 20:57:23 - simulation_user - INFO - main.py[370] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-23 10:43:24 - simulation_user - INFO - main.py[370] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-23 11:56:12 - simulation_user - INFO - main.py[427] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-23 12:27:26 - simulation_user - INFO - main.py[475] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-23 17:07:36 - simulation_user - INFO - main.py[475] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-23 17:12:53 - simulation_user - INFO - main.py[475] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-23 17:20:13 - simulation_user - INFO - main.py[504] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-23 19:40:50 - simulation_user - INFO - main.py[500] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-23 22:04:10 - simulation_user - INFO - main.py[500] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-23 22:14:09 - simulation_user - INFO - main.py[500] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-23 22:21:27 - simulation_user - INFO - main.py[500] init_shared_data - trace_id=INT - 开始初始化交易程序

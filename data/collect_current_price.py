@@ -1,13 +1,15 @@
 from datetime import datetime
 from public import shared_data
 from public.print_context import print_context
-from public.shared_data import ths_lock
+from public.shared_data import ctrl_rlock, set_lots
 from data.db_price import batch_write_price
 import re, time
 from time import sleep
+from public.shared_data import click_control
 
 # 取消时间间隔判断，固定满100条入库
 BUFFER_MAX_NUM = 100
+
 
 def get_current_price(ts_code="m2611"):
     from public.shared_data import simulate_input
@@ -15,14 +17,15 @@ def get_current_price(ts_code="m2611"):
     is_printed = False
 
     # 锁定读取控件句柄
-    with ths_lock:
+    with ctrl_rlock:
         code_ctrl = shared_data.ths_common_control['期货代码'][0]
         lock_ctrl = shared_data.ths_common_control["商品锁"][0]
+        yk_ctrl = shared_data.ths_common_control["盈亏"][0]
     window = shared_data.trade_window
 
     # 内部工具函数：实时获取界面当前合约
     def get_ui_contract():
-        with ths_lock:
+        with ctrl_rlock:
             new_ts_code = code_ctrl.window_text().strip()
             shared_data.ts_code = new_ts_code if new_ts_code else ts_code
             return new_ts_code
@@ -45,19 +48,35 @@ def get_current_price(ts_code="m2611"):
         new_ui_code = get_ui_contract()
         # 检测合约切换：强制落库所有缓存数据
         if new_ui_code and new_ui_code != current_ui_code:
+            with shared_data.variables_rlock:
+                shared_data.set_lots_flag = True
             with shared_data.buffer_lock:
                 cache_data = shared_data.price_buffer.copy()
                 shared_data.price_buffer.clear()
             if cache_data:
                 batch_write_price(cache_data)
+
                 print_context(f"[{datetime.now()}] 合约切换 {current_ui_code} → {new_ui_code}(shared_data.ts_code:{shared_data.ts_code})，强制入库{len(cache_data)}条")
             current_ui_code = new_ui_code
+            with shared_data.variables_rlock:
+                shared_data.ts_code = new_ui_code
+            sleep(0.8)
+            if shared_data.set_lots_flag:
+                set_lots()  # 合约切换后更新对应合约的手数值
+                shared_data.set_lots_flag = False
+
 
         # 非交易时间仅打印日志
         if not shared_data.trade_flag():
+            if shared_data.set_lots_flag:
+                set_lots()  # 合约切换后更新对应合约的手数
+                shared_data.set_lots_flag = False
             if not is_printed:
-                print(f"\r[{datetime.now().strftime('%H:%M:%S')}] 非交易时段，当前界面合约：{current_ui_code}  info from get_current_price", flush=True, end='')
-                # is_printed = True
+                
+                print(f"\r[{datetime.now().strftime('%H:%M:%S')}] 非交易时段，当前界面合约：{current_ui_code} "
+                      f"交易简讯：{yk_ctrl.window_text()}", flush=True, end='')
+
+                is_printed = True
             sleep(1)
             continue
         is_printed = False
@@ -66,11 +85,12 @@ def get_current_price(ts_code="m2611"):
         write_batch = None
         try:
             # 读取价格控件
-            with shared_data.ths_lock:
+            with shared_data.ctrl_rlock:
                 price_ctrl = shared_data.ths_common_control['即时价格'][0]
                 price_text = price_ctrl.window_text().strip()
             # 价格格式校验
             if not price_text or not price_patten.match(price_text):
+                print(f"[{datetime.now().strftime('%H:%M:%S')}]程序出错，没有正确读取同花顺交易窗口中的即时价格！", flush=True, end='')
                 sleep(0.2)
                 continue
             # 记录：时间、价格、界面实时合约

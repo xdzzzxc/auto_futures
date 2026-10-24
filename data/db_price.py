@@ -174,7 +174,7 @@ def batch_write_price(batch_list):
                 with sqlite3.connect(db_path, timeout=10) as conn:
                     conn.executemany(insert_sql, valid_all)
             trim_old_data(db_path)
-            print_context.print_context(f"✅ 批量写入完成：{db_path} 共{len(valid_all)}条")
+            print_context.print_context(f"\n✅ 批量写入完成：{db_path} 共{len(valid_all)}条")
         except Exception as e:
             print_context.print_context(f"批量入库异常 db:{db_path} err:{e}")
 
@@ -263,7 +263,105 @@ def manual_start_wal(db_folder_path:str = db_folder):
             conn.close()
     print("全部处理完成！")
 
+# 统计期货品种的即时价格获取的完整性
+@_retry_on_lock()
+def check_db_missing_records(db_path: str = None, ts_code: str = None):
+    """
+    检查指定sqlite库中合约行情记录缺失统计
+    :param db_path: 数据库完整路径，None则自动取【当日库】，不再自动切次日库
+    :param ts_code: 指定合约代码如"m2611"，None则统计库内全部品种
+    :return: dict 统计结果，每个品种包含：实际记录数、缺失记录条数、缺失时段列表
+    """
+    # 查询前强制刷内存缓存到磁盘，保证数据完整
+    flush_remain_buffer()
+
+    # 自动获取db路径：不传db_path，只读当日库（不再21点切次日库）
+    if db_path is None:
+        now = datetime.now()
+        target_db_date = now.strftime("%Y%m%d")
+        base_db_folder = os.path.join(get_data_cache_dir(), "db")
+        db_path = os.path.join(base_db_folder, f"{target_db_date}.db")
+
+    if not os.path.exists(db_path):
+        print_context.print_context(f"数据库文件不存在：{db_path}")
+        return {}
+
+    interval_sec = shared_data.get_price_interval
+    max_gap_ignore = 15 * 60  # 大于15分钟的间隔视为休市，不统计缺失
+    result_summary = {}
+
+    with sqlite3.connect(db_path, timeout=10) as conn:
+        cur = conn.cursor()
+        # 获取需要处理的ts_code列表
+        if ts_code is not None:
+            ts_list = [ts_code]
+        else:
+            cur.execute("SELECT DISTINCT ts_code FROM price_data")
+            ts_rows = cur.fetchall()
+            ts_list = [row[0] for row in ts_rows]
+
+        for target_ts in ts_list:
+            # 按时间升序读取该合约全部数据
+            sql = """
+                SELECT record_time, price
+                FROM price_data
+                WHERE ts_code = ?
+                ORDER BY record_time ASC
+            """
+            df = pd.read_sql(sql, conn, params=(target_ts,))
+            actual_count = len(df)
+            if actual_count == 0:
+                print_context.print_context(f"{target_ts}：库内无任何记录")
+                result_summary[target_ts] = {
+                    "actual_count": 0,
+                    "missing_count": 0,
+                    "missing_intervals": []
+                }
+                continue
+
+            # 时间解析
+            df["dt"] = pd.to_datetime(df["record_time"], format="%Y%m%d%H%M%S")
+            missing_intervals = []
+            missing_count = 0
+
+            for i in range(1, actual_count):
+                prev_dt = df["dt"].iloc[i-1]
+                curr_dt = df["dt"].iloc[i]
+                delta_sec = (curr_dt - prev_dt).total_seconds()
+
+                # 判断规则
+                if delta_sec <= interval_sec + 1:
+                    # 间隔正常，无缺失
+                    continue
+                elif delta_sec > max_gap_ignore:
+                    # 间隔超过15分钟：休市，跳过，不计缺失
+                    continue
+                else:
+                    # 区间：> interval+1 且 <=15min，判定行情缺失
+                    # 估算缺失条数
+                    gap_record_num = int((delta_sec - interval_sec) / interval_sec)
+                    missing_count += gap_record_num
+                    missing_intervals.append({
+                        "gap_start": prev_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                        "gap_end": curr_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                        "gap_seconds": round(delta_sec, 2),
+                        "estimated_missing_records": gap_record_num
+                    })
+
+            result_summary[target_ts] = {
+                "actual_count": actual_count,
+                "missing_count": missing_count,
+                "missing_intervals": missing_intervals
+            }
+            print_context.print_context(
+                f"【{target_ts}】实际:{actual_count}条 | 估算缺失:{missing_count}条 | 缺失段:{len(missing_intervals)}处"
+            )
+    return result_summary
+
+
 if __name__ == '__main__':
-    df1 = read_db(full_ts_code="fu2609", start_time="20260727224600", end_time=None, counts=None, ascending=False)
-    print(df1)
-    get_write_db_paths()
+    # df1 = read_db(full_ts_code="fu2609", start_time="20260727224600", end_time=None, counts=None, ascending=False)
+    # print(df1)
+    # get_write_db_paths()
+    # print(read_db("m2611"))
+    check_db_missing_records()

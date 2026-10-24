@@ -1,26 +1,36 @@
-import threading
 from time import sleep
+from core.monitor import monitor_profit_loss
 from public import shared_data
-from public.jiaoyisuo import futures_info
-import re
+from log.trade_log import setup_trade_loggers, stop_queue_listener
 from public.print_context import print_context
-from core.connect_ths import check_ths_status
+from core.connect_ths import check_ths_status, ths_watchdog
 from core.trade import order
-from log.trade_log import setup_trade_loggers
 from data.collect_current_price import get_current_price
-from data.future_trend import query_future_info, merge_two_info_dict
+from data.future_trend import merge_two_info_dict
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
 from data.data_from_sina import fetch_future_data
 from public.sync_time import sync_time
-from core.monitor import monitor_profit_loss
 from data.get_quote import get_open_price
 from data.db_price import flush_remain_buffer
 from data.reget_open_price import reget_open_price
-from main_monitor.run_monitor import run_monitor
 from public.anti_screensaver import main_daemon
-from public.shared_data import clean_old_trade_db
+from public.shared_data import clean_old_trade_db, default_lots_dict
+from audio.play_alert import *
+
+TIMEOUT_SEC = 10
+
+def global_exception_handler(exc_type, exc_value, exc_traceback):
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    _logger = shared_data.logger
+    if _logger is None:
+        sound_warning()
+        print_context("【全局未捕获异常】程序崩溃，日志器尚未初始化完成！", exc_info=(exc_type, exc_value, exc_traceback))
+        return
+    _logger.critical("【全局未捕获异常】程序崩溃", exc_info=(exc_type, exc_value, exc_traceback))
 
 def get_direction(title="交易方向", msg=None) -> str | None:
     default_dir = shared_data.direction
@@ -58,15 +68,35 @@ def get_direction(title="交易方向", msg=None) -> str | None:
     combo.pack(fill=tk.X, pady=6)
 
     result = None
+    timer_id = None
+    is_auto = False
+
+    def auto_timeout():
+        nonlocal is_auto
+        is_auto = True
+        if root.winfo_exists():
+            ok()
+
+    timer_id = root.after(TIMEOUT_SEC * 1000, auto_timeout)
 
     def ok():
-        nonlocal result
+        nonlocal result, timer_id
+        if timer_id is not None:
+            root.after_cancel(timer_id)
+            timer_id = None
         result = selected_dir.get().strip()
         shared_data.direction = result
+        if is_auto:
+            print_context(f"程序自动输入交易方向的默认值：{result}")
+        else:
+            print_context(f"人工手动输入交易方向值：{result}")
         root.destroy()
 
     def cancel():
-        nonlocal result
+        nonlocal result, timer_id
+        if timer_id is not None:
+            root.after_cancel(timer_id)
+            timer_id = None
         result = None
         root.destroy()
 
@@ -79,24 +109,11 @@ def get_direction(title="交易方向", msg=None) -> str | None:
     ttk.Button(btn_frame, text="取消", command=cancel, width=6).pack(side=tk.LEFT)
 
     root.mainloop()
-    # print_context(f"今天期货交易参数列表：\n期货品种：{shared_data.ts_code}, \n交易方向：{shared_data.direction}\n"
-    #               f"今日开盘：{shared_data.open_price}\n等待程序启动同花顺期货通 ······")
     return result
-
 
 def show_custom_choicebox(choices, title="选择品种", msg="请选择期货品种") -> str | None:
     selected = None
-
-    def on_ok():
-        nonlocal selected
-        if listbox.curselection():
-            selected = listbox.get(listbox.curselection())
-        win.destroy()
-
-    def on_cancel():
-        nonlocal selected
-        selected = None
-        win.destroy()
+    timer_id = None
 
     win = tk.Tk()
     win.title(title)
@@ -124,19 +141,65 @@ def show_custom_choicebox(choices, title="选择品种", msg="请选择期货品
     )
     for item in choices:
         listbox.insert(tk.END, item)
-    listbox.pack(padx=18, pady=6, fill=tk.BOTH, expand=True)
 
-    if choices:
+    default_code = shared_data.default_tscode
+    target_idx = None
+    for idx, text in enumerate(choices):
+        if text.startswith(f"{default_code}-"):
+            target_idx = idx
+            break
+    if target_idx is not None:
+        listbox.selection_set(target_idx)
+    elif choices:
         listbox.selection_set(0)
 
+    listbox.pack(padx=18, pady=6, fill=tk.BOTH, expand=True)
     listbox.bind("<Double-1>", lambda event: on_ok())
+
+    is_auto = False
+    def auto_timeout():
+        nonlocal is_auto
+        is_auto = True
+        if win.winfo_exists():
+            target_code = shared_data.default_tscode
+            idx = None
+            for i, text in enumerate(choices):
+                if text.startswith(f"{target_code}-"):
+                    idx = i
+                    break
+            if idx is not None:
+                listbox.selection_clear(0, tk.END)
+                listbox.selection_set(idx)
+            on_ok()
+
+    timer_id = win.after(TIMEOUT_SEC * 1000, auto_timeout)
+
+    def on_ok():
+        nonlocal selected, timer_id, is_auto
+        if timer_id is not None:
+            win.after_cancel(timer_id)
+            timer_id = None
+        sel_idx = listbox.curselection()
+        if sel_idx:
+            selected = listbox.get(sel_idx[0])
+            if is_auto:
+                print_context(f"程序自动输入选择品种的默认值：{selected}")
+            else:
+                print_context(f"人工手动输入选择品种值：{selected}")
+        win.destroy()
+
+    def on_cancel():
+        nonlocal selected, timer_id
+        if timer_id is not None:
+            win.after_cancel(timer_id)
+            timer_id = None
+        selected = None
+        win.destroy()
 
     btn_frame = ttk.Frame(win)
     btn_frame.pack(pady=12)
-
     ok_btn = ttk.Button(btn_frame, text="OK", command=on_ok, width=10)
     ok_btn.pack(side=tk.LEFT, padx=14)
-
     cancel_btn = ttk.Button(btn_frame, text="Cancel", command=on_cancel, width=10)
     cancel_btn.pack(side=tk.LEFT, padx=14)
 
@@ -144,53 +207,41 @@ def show_custom_choicebox(choices, title="选择品种", msg="请选择期货品
     return selected
 
 def select_future():
-    # futures_info_dict = query_future_info()
     futures_info_dict = merge_two_info_dict()
     choices = []
     code_map = {}
 
-    # 1. 先加载资讯里的品种
     for code, (trend, info) in futures_info_dict.items():
         display_text = f"{code}-{trend}-{info}"
         choices.append(display_text)
         code_map[display_text] = (code, trend)
 
-    # ====================== 【核心：强制加入你的必备品种】 ======================
-    # 不管资讯有没有，这几个必须出现在选择框里
     from public import shared_data
-    required_contracts = shared_data.quote_set  # ["m2609", "c2609", "jd2609"]
-
-    # 默认趋势（如果资讯里没有，就给一个默认值）
+    required_contracts = shared_data.quote_list
     default_trend = "sideways"
-
     for code in required_contracts:
-        # 构造显示文本
         display_text = f"{code}-{default_trend}-必备品种"
-
-        # 如果已经存在，就不重复添加
         if display_text not in choices:
             choices.append(display_text)
             code_map[display_text] = (code, default_trend)
-    # ==========================================================================
 
     def show_scroll_choicebox(title, msg, choices) -> str | None:
+        selected_val = None
+        timer_id = None
+        is_auto = False
+
         root = tk.Tk()
         root.title(title)
         root.geometry("600x400")
         root.minsize(700, 450)
-
         main_frame = tk.Frame(root, padx=25, pady=25)
         main_frame.pack(fill=tk.BOTH, expand=True)
-
         tip_label = tk.Label(main_frame, text=msg, font=("blue", 14))
         tip_label.pack(anchor="w", pady=(0, 18))
-
         list_panel = tk.Frame(main_frame, relief=tk.RIDGE, bd=3)
         list_panel.pack(fill=tk.BOTH, expand=True, pady=0)
-
         v_scroll = tk.Scrollbar(list_panel, orient=tk.VERTICAL)
         h_scroll = tk.Scrollbar(list_panel, orient=tk.HORIZONTAL)
-
         list_box = tk.Listbox(
             list_panel,
             yscrollcommand=v_scroll.set,
@@ -203,28 +254,50 @@ def select_future():
             fg="blue",
         )
         list_box.bind('<Double-Button-1>', lambda e: confirm_choose())
-
         v_scroll.config(command=list_box.yview)
         h_scroll.config(command=list_box.xview)
-
         v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         h_scroll.pack(side=tk.BOTTOM, fill=tk.X)
         list_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
-
         for item in choices:
             list_box.insert(tk.END, item)
 
-        selected_val = None
+        def auto_timeout():
+            nonlocal is_auto
+            is_auto = True
+            if root.winfo_exists():
+                target_code = shared_data.default_tscode
+                target_idx = None
+                for i, text in enumerate(choices):
+                    if text.startswith(f"{target_code}-"):
+                        target_idx = i
+                        break
+                if target_idx is not None:
+                    list_box.selection_clear(0, tk.END)
+                    list_box.selection_set(target_idx)
+                confirm_choose()
+
+        timer_id = root.after(TIMEOUT_SEC * 1000, auto_timeout)
 
         def confirm_choose():
-            nonlocal selected_val
+            nonlocal selected_val, timer_id, is_auto
+            if timer_id is not None:
+                root.after_cancel(timer_id)
+                timer_id = None
             sel_idx = list_box.curselection()
             if sel_idx:
                 selected_val = list_box.get(sel_idx[0])
+                if is_auto:
+                    print_context(f"程序自动输入选择品种的默认值：{selected_val}")
+                else:
+                    print_context(f"人工手动输入选择品种值：{selected_val}")
             root.destroy()
 
         def cancel_choose():
-            nonlocal selected_val
+            nonlocal selected_val, timer_id
+            if timer_id is not None:
+                root.after_cancel(timer_id)
+                timer_id = None
             selected_val = None
             root.destroy()
 
@@ -241,13 +314,15 @@ def select_future():
         msg="请选择您要交易的期货商品品种！",
         choices=choices
     )
-
     if selected_text:
-        parts = selected_text.split("-")
-        code = parts[0]
-        trend = parts[1]
-        shared_data.ts_code = code.lower()
+        parts = selected_text.split("-", maxsplit=2)
+        code = parts[0].lower()
+        trend = parts[1].lower()
+        shared_data.ts_code = code
         shared_data.direction = trend
+        with shared_data.variables_rlock:
+            if code not in shared_data.quote_list:
+                shared_data.quote_list.insert(0, code)
     else:
         print_context("没有选择合适的期货商品，程序已退出！")
         exit()
@@ -265,90 +340,189 @@ def select_future():
             shared_data.direction = input_value
             break
 
-
-
-def set_stop_loss():  # 窗口止损止盈设置
+def set_stop_loss():
     win = tk.Tk()
     win.title("设置止盈止损")
     win.geometry("260x130")
     win.resizable(False, False)
+    timer_id = None
+    is_auto = False
 
-    # 标签+输入框
     tk.Label(win, text="止盈值：").place(x=30, y=20)
     e1 = tk.Entry(win, width=15)
     e1.insert(0, "200")
     e1.place(x=90, y=20)
-
     tk.Label(win, text="止损值：").place(x=30, y=50)
     e2 = tk.Entry(win, width=15)
     e2.insert(0, "500")
     e2.place(x=90, y=50)
 
+    def auto_timeout():
+        nonlocal is_auto
+        is_auto = True
+        if win.winfo_exists():
+            confirm()
+
+    timer_id = win.after(TIMEOUT_SEC * 1000, auto_timeout)
+
     def confirm():
+        nonlocal timer_id, is_auto
+        if timer_id is not None:
+            win.after_cancel(timer_id)
+            timer_id = None
         try:
-            shared_data.pre_profit = float(e1.get())
-            shared_data.pre_loss = -abs(float(e2.get()))
+            lots = shared_data.tscode_lots_dict.get(shared_data.ts_code, 1)
+            pre_profit = float(e1.get()) * lots
+            pre_loss = -abs(float(e2.get())) * lots
+            shared_data.pre_profit = pre_profit
+            shared_data.pre_loss = pre_loss
+            if is_auto:
+                print_context(f"程序自动输入止盈止损的默认值：止盈{pre_profit}元，止损{pre_loss}元")
+            else:
+                print_context(f"人工手动输入止盈止损值：止盈{pre_profit}元，止损{pre_loss}元")
             win.destroy()
-            print(f"已手动设置期货品种[{shared_data.ts_code}]的止盈值：{shared_data.pre_profit}元 ； 止损值：{shared_data.pre_loss}元。")
         except Exception:
             messagebox.showerror("错误", "请输入有效数字")
 
     def cancel():
+        nonlocal timer_id
+        if timer_id is not None:
+            win.after_cancel(timer_id)
+            timer_id = None
         win.destroy()
         print("请勿按取消按钮，否则程序将关闭应用等待重启！")
 
-    # 回车确认统一入口
     def enter_submit(event):
         confirm()
 
-    # 止盈输入框回车切换到止损框
     def e1_switch_e2(event):
         e2.focus_set()
         e2.select_range(0, tk.END)
 
-    # 按钮
+    e1.bind("<Return>", e1_switch_e2)
+    e2.bind("<Return>", enter_submit)
+    win.bind("<Return>", enter_submit)
+
     btn_ok = tk.Button(win, text="确定", width=7, command=confirm)
     btn_ok.place(x=50, y=85)
     tk.Button(win, text="取消", width=7, command=cancel).place(x=130, y=85)
 
-    # ========== 绑定事件 ==========
-    # 止盈框回车切止损
-    e1.bind("<Return>", e1_switch_e2)
-    # 止损框回车提交
-    e2.bind("<Return>", enter_submit)
-    # 全局窗口回车触发确定
-    win.bind("<Return>", enter_submit)
-
-    # ========== 窗口打开立刻聚焦第一个输入框，文字全选 ==========
     win.focus_force()
     e1.focus_set()
     e1.select_range(0, tk.END)
     win.mainloop()
 
+def set_lot_size():
+    win = tk.Tk()
+    win.title("设置交易手数")
+    win.geometry("240x110")
+    win.resizable(False, False)
+    timer_id = None
+    is_auto = False
 
-def _init_shared_data(user_type, target_days, lot_size=1, get_price_interval=5):
+    tk.Label(win, text="交易手数(1~10)：").place(x=22, y=22)
+    entry = tk.Entry(win, width=12)
+    entry.insert(0, "1")
+    entry.place(x=110, y=22)
+
+    lot_result = None
+
+    def auto_timeout():
+        nonlocal is_auto
+        is_auto = True
+        if win.winfo_exists():
+            confirm()
+
+    timer_id = win.after(TIMEOUT_SEC * 1000, auto_timeout)
+
+    def confirm():
+        nonlocal lot_result, timer_id, is_auto
+        if timer_id is not None:
+            win.after_cancel(timer_id)
+            timer_id = None
+        try:
+            val = int(entry.get().strip())
+            if 1 <= val <= 10:
+                lot_result = val
+                if is_auto:
+                    print_context(f"程序自动输入交易手数的默认值：{lot_result}手")
+                else:
+                    print_context(f"人工手动输入交易手数值：{lot_result}手")
+                win.destroy()
+            else:
+                messagebox.showerror("输入错误", "手数必须是1~10之间整数！")
+        except ValueError:
+            messagebox.showerror("输入错误", "请输入整数！")
+
+    def cancel():
+        nonlocal lot_result, timer_id
+        if timer_id is not None:
+            win.after_cancel(timer_id)
+            timer_id = None
+        lot_result = None
+        win.destroy()
+
+    def enter_submit(event):
+        confirm()
+
+    entry.bind("<Return>", enter_submit)
+    win.bind("<Return>", enter_submit)
+
+    tk.Button(win, text="确定", width=7, command=confirm).place(x=40, y=70)
+    tk.Button(win, text="取消", width=7, command=cancel).place(x=120, y=70)
+
+    win.focus_force()
+    entry.focus_set()
+    entry.select_range(0, tk.END)
+
+    win.mainloop()
+
+    if lot_result == 1 or lot_result is None:
+        lot_result = shared_data.default_lots_dict.get(shared_data.ts_code[:-4], 1)
+        shared_data.tscode_lots_dict.update({shared_data.ts_code: lot_result})
+        print_context(f"✅ 程序已使用期货券商的默认交易手数：{lot_result}手")
+        return lot_result
+    else:
+        shared_data.tscode_lots_dict.update({shared_data.ts_code: lot_result})
+        print_context(f"✅ 已设置交易手数：{lot_result}手")
+        return lot_result
+
+
+
+
+def init_shared_data(user_type, ts_code, target_days, trade_futures_list, get_price_interval=5):
+    # sound_order()
     print_context("程序正在校验日期、时间 ······")
     sync_time()
     shared_data.user_type = user_type
     shared_data.logger = setup_trade_loggers()
+    log = shared_data.logger
+    log.info("开始初始化交易程序", extra={"trace_id": "INT"})
+
+    shared_data.open_price = None  # 初始化开盘价容器
+
+    merge_two_info_dict()
     select_future()  # 选择交易的期货品种
-    ts_code = shared_data.ts_code
+    set_lot_size()   # 【新增】弹出手数输入框
     set_stop_loss()  # 设置期货品种的固定止损止盈值
     shared_data.target_days = target_days
-    shared_data.lot_size = lot_size
-    shared_data.interval = get_price_interval  # 获取即时行情价格的时间间隔
-    prefix = re.match(r'[a-zA-Z]+', ts_code).group()
-    # shared_data.min_price_change = futures_info[prefix]['min_price_change']
+    shared_data.quote_list = trade_futures_list
+    # if ts_code in trade_futures_list:
+    #     shared_data.ts_code = ts_code
+    # else:
+    #     shared_data.ts_code = trade_futures_list[0]  # 默认第一个为交易品种，如有改变再在交易窗口中切换
+    shared_data.get_price_interval = get_price_interval  # 获取即时行情价格的时间间隔
     clean_old_trade_db(dry_run=False)
     fetch_future_data()
-    # print(f"[{shared_data.ts_code}]历史交易数据：{shared_data.history_data_analysis}")
     check_ths_status()  # 检查同花顺期货通启动状态
-    get_open_price()
 
-if __name__ == "__main__":
-    # 在这里注册钩子和信号，目标是在退出pycharm或关闭windows时将缓存中的数据写入数据库文件中
+
+def main():
+    # 【关键：开启全局异常捕获】
+    sys.excepthook = global_exception_handler
     import atexit
     import signal
+
     def exit_clean():
         print("\n🛑 程序触发退出，正在落地行情缓存...")
         try:
@@ -357,39 +531,63 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"❌ 缓存落库异常: {e}")
 
-
     atexit.register(exit_clean)
-
+    # 注册日志队列关闭，刷盘
+    atexit.register(stop_queue_listener)
 
     def signal_handler(signum, frame):
         print(f"\n⚠️ 收到系统信号 {signum}，执行缓存落库")
         exit_clean()
+        stop_queue_listener()
         raise SystemExit(0)
+
     signal.signal(signal.SIGINT, signal_handler)
     if hasattr(signal, "SIGTERM"):
         signal.signal(signal.SIGTERM, signal_handler)
 
-    # ========== 启动核心线程（daemon=True 安全退出）==========
-    _init_shared_data(user_type=0, target_days=20, lot_size=1, get_price_interval=5)
+    # ========== 初始化，挂载logger到shared_data ==========
+    init_shared_data(user_type=0,
+                     target_days=15,
+                     ts_code="",
+                     get_price_interval=5,
+                     trade_futures_list=["m2701", "c2701"])
+
+    # 定义所有线程
     price_thread = threading.Thread(target=get_current_price, name="PriceThread", daemon=True)
     order_thread = threading.Thread(target=order, name="OrderThread", daemon=True)
-    monitor_thread = threading.Thread(target=run_monitor, name="MonitorThread", daemon=True)
+    monitor_thread = threading.Thread(target=monitor_profit_loss, name="MonitorThread", daemon=True)
     reget_open_price_thread = threading.Thread(target=reget_open_price, name="ReGetOpenPriceThread", daemon=True)
+    anti_thread = threading.Thread(target=main_daemon, name="AntiThread", daemon=True)
+    watchdog = threading.Thread(target=ths_watchdog, name="WatchdogThread", daemon=True)
+    # 统一全部start，消除时序分散问题
     price_thread.start()
-    # print_context("30秒后开始检索价格数据下单！")
     order_thread.start()
-    print(f"order线程is_alive={order_thread.is_alive()}")
-    if shared_data.pre_profit == 0 and shared_data.pre_loss == 0:
-        print_context("用户没有手动设置固定止损止盈值，程序没有启动自动止损止盈监控进程！其他线程已开启：\n"
-                      "获取期货品种即时行情线程-collect_current_price(PriceThread)\n订单线程-trade.order(OrderThread)")
-    else:
-        monitor_thread.start()
-        print_context(f"✅ 所有量化交易线程启动成功 >>>\n获取期货品种即时行情线程-collect_current_price(PriceThread)"
-                  f"\n订单线程-trade.order(OrderThread)\n自动交易监控线程-monitor.monitor(MonitorThread)")
-    sleep(5)
+    monitor_thread.start()
     reget_open_price_thread.start()
-    anti_thread = threading.Thread(target=main_daemon, daemon=True)  # 屏保程序可以在需要的时候单独运行
     anti_thread.start()
+    # watchdog.start()
+    print_context(f"✅ 所有量化交易线程启动成功 >>>\n"
+                  f"获取期货品种即时行情线程-collect_current_price(PriceThread)\n"
+                  f"订单线程-trade.order(OrderThread)\n"
+                  f"自动交易监控线程-monitor.monitor(MonitorThread)\n"
+                  f"开仓价重取线程-ReGetOpenPriceThread\n"
+                  f"守护任务线程-AntiThread")
+
+    # ===== 新增：开盘价获取放到独立子线程，休市等待不再阻塞主线程 =====
+    open_price_thread = threading.Thread(target=get_open_price, name="OpenPriceThread", daemon=True)
+    open_price_thread.start()
+    print_context("✅ 开盘价获取线程 OpenPriceThread 已启动（休市等待在子线程执行，不阻塞主线程）")
+
+    # 把线程放到列表里方便后续模块调用查看线程的存活状态
+    shared_data.thread_list = []
+    shared_data.thread_list.extend([
+        price_thread,
+        order_thread,
+        monitor_thread,
+        reget_open_price_thread,
+        anti_thread,
+        open_price_thread
+    ])
 
     try:
         while True:
@@ -397,3 +595,8 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         flush_remain_buffer()
         print_context("\n🛑 程序已手动停止")
+
+
+if __name__ == "__main__":
+    main()
+    # select_future()

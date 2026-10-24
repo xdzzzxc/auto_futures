@@ -9,7 +9,7 @@ from ctypes import wintypes
 import atexit
 import pywintypes
 
-from public import shared_data
+from public import shared_data, print_context
 
 # ====================== 配置区 ======================
 # 进程白名单：仅用于后台进程查杀放行，弹窗规则不受白名单限制
@@ -73,15 +73,15 @@ def keep_system_active():
 
 def prevent_screensaver():
     """防屏保微动鼠标；注意：调用前必须判断 not shared_data.ui_busy"""
-    with shared_data.mouse_lock:
-        user32.GetCursorPos(ctypes.byref(pt))
-        dx = random.randint(-4, 4)
-        dy = random.randint(-4, 4)
-        new_x = pt.x + dx
-        new_y = pt.y + dy
-        user32.SetCursorPos(new_x, new_y)
-        sleep(0.02)
-        user32.SetCursorPos(pt.x, pt.y)
+    # with shared_data.variables_rlock:
+    user32.GetCursorPos(ctypes.byref(pt))
+    dx = random.randint(-4, 4)
+    dy = random.randint(-4, 4)
+    new_x = pt.x + dx
+    new_y = pt.y + dy
+    user32.SetCursorPos(new_x, new_y)
+    sleep(0.02)
+    user32.SetCursorPos(pt.x, pt.y)
 
 
 def is_target_popup(hwnd: int) -> bool:
@@ -112,14 +112,23 @@ def close_only_target_popup():
     def enum_callback(hwnd, _):
         if not win32gui.IsWindow(hwnd) or not win32gui.IsWindowVisible(hwnd):
             return True
+        win_title = win32gui.GetWindowText(hwnd).strip()
+        # 系统窗口标题白名单
+        SYSTEM_TITLE_WHITE = {"运行", "Run"}
+        if win_title in SYSTEM_TITLE_WHITE:
+            return True
+
         if not is_target_popup(hwnd):
             return True
 
-        win_title = win32gui.GetWindowText(hwnd).strip()
         _, pid = win32process.GetWindowThreadProcessId(hwnd)
         proc_name = "未知进程"
         try:
-            proc_name = psutil.Process(pid).name().lower()
+            proc = psutil.Process(pid)
+            proc_name = proc.name().lower()
+            # explorer.exe 系统资源管理器弹窗全部放行，不关闭
+            if proc_name == "explorer.exe":
+                return True
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass
 
@@ -175,10 +184,8 @@ last_mouse = datetime.now()
 MOUSE_INTERVAL = 16.5  # 鼠标微动间隔秒
 
 def main_daemon():
+    from public.shared_data import print_thread_status
     global last_mouse
-    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"===== 守护程序启动[{now}] 功能：防屏保+清除遮挡期货控件弹窗 =====")
-
     while True:
         try:
             # 循环内刷新电源抑制，避免线程绑定失效
@@ -196,7 +203,7 @@ def main_daemon():
 
             # 查杀黑名单壁纸广告进程
             kill_blacklist_process()
-
+            # print_thread_status()  # 打印线程状态
             sleep(random.randint(5, 10))
 
         except Exception as e:
