@@ -53,6 +53,7 @@ ui_busy: bool = False
 # sideways_product_list = {"m", "c", "jd"}
 
 # __________________________________________________
+check_ths_status_flag: bool = True  # 表示正常状态，False表示断线状态
 login_control = {}  # 登录期货通交易软件
 ths_common_control = {}  # 交易平台常用控件字典,此处为多进程管理模式，以便进程数据共享
 condition_control = {}  # 条件单窗口控件映射字典

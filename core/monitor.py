@@ -13,6 +13,7 @@ import os, json
 # 导入计数写入函数
 from core.private import append_close_record
 from core.connect_ths import set_loss_profit
+from public.jiaoyisuo import get_future_info
 
 
 logger = setup_trade_loggers()
@@ -22,36 +23,6 @@ MONITOR_INTERVAL = 0.5
 NO_HOLD_PRINT_INTERVAL = 6000  # 无持仓每60秒打印一次，不刷屏
 TRADE_INTERVAL = shared_data.valid_trade_interval if shared_data.valid_trade_interval else 300
 
-# def find_target_contract_ctrl(ths_window, fut_code: str, screen_top_limit=900):
-#     """
-#     在持仓窗口查找目标合约Text控件
-#     return: 找到返回控件对象，找不到返回None
-#     """
-#     fut_code_ctrl = None
-#     try:
-#         tmp_ctrl = ths_window.child_window(control_type="Text", title=fut_code)
-#         tmp_ctrl.wait("visible", timeout=0.8)
-#         rect = tmp_ctrl.rectangle()
-#         rect_valid = (rect.right > rect.left) and (rect.bottom > rect.top)
-#         if rect_valid and tmp_ctrl.is_visible() and tmp_ctrl.is_enabled() and rect.top < screen_top_limit:
-#             fut_code_ctrl = tmp_ctrl
-#     except (TimeoutError, ElementNotFoundError):
-#         fut_code_ctrl = None
-#     return fut_code
-#
-# def cancel_trade(rect = (539, 948, 20, 18)):
-#     """撤单：点击撤单控件，增加异常捕获"""
-#     try:
-#         x, y, w, h = rect
-#         center_x = x + w // 2
-#         center_y = y + h // 2
-#         mouse.click(button="left", coords=(center_x, center_y))
-#         print_context("👉 执行撤单点击")
-#         sleep(0.3)
-#         return True
-#     except Exception as e:
-#         print_context(f"❌撤单点击失败: {str(e)}")
-#         return False
 
 # 新增：读取trade_log.json获取今日交易次数、累计盈亏
 def get_today_trade_stat():
@@ -171,6 +142,13 @@ def monitor_profit_loss():
                 shared_data.trade_window.set_focus()
                 sleep(0.5)
                 result = click_position(close_ctrl_position)
+            # 取本次平仓对应的手数
+            lots = shared_data.tscode_lots_dict.get(ts_code_arg, 1)
+            # 读取品种费率，计算双边手续费（和order里口径保持一致）
+            fut_info = get_future_info(ts_code_arg, 0)
+            per_lot_two_way_fee = fut_info.get('fee', 0) * 2
+            total_fee = per_lot_two_way_fee * lots
+            net_profit = profit_arg - total_fee  # 纯利润 = 界面毛盈亏 - 双边手续费
 
             if result:
                 print_context("_trade: 程序已根据止损止盈设置值完成自动平仓！")
@@ -187,9 +165,13 @@ def monitor_profit_loss():
                 real_cnt, real_pnl = stat["real_user"]
                 full_msg = (
                     f"{msg}\n"
+                    f"本次平仓手数：{lots}手\n"
+                    f"市值盈亏（涨跌差价）：{profit_arg:.2f}元\n"
+                    f"本次双边手续费：{total_fee:.2f}元\n"
+                    f"✅纯利润：{net_profit:.2f}元\n"
                     f"------------ 今日平仓汇总 ------------\n"
-                    f"【模拟账户】平仓次数：{sim_cnt}，累计盈亏：{sim_pnl:.2f}元\n"
-                    f"【实盘账户】平仓次数：{real_cnt}，累计盈亏：{real_pnl:.2f}元"
+                    f"【模拟账户】平仓次数：{sim_cnt}，累计毛盈亏：{sim_pnl:.2f}元\n"
+                    f"【实盘账户】平仓次数：{real_cnt}，累计毛盈亏：{real_pnl:.2f}元"
                 )
                 send_msg(f"自动平仓成功 - 品种：{ts_code_arg}\n{full_msg}")
                 print_context(f"自动平仓 [{datetime.now().strftime('%H:%M:%S')}]")

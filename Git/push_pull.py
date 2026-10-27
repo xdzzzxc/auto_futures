@@ -3,7 +3,7 @@ from public.shared_data import get_data_cache_dir
 from git import Repo
 
 project_path = Path(get_data_cache_dir()).parent.parent
-print(f"git工作目录 >>> {project_path}")
+# print(f"git工作目录 >>> {project_path}")
 
 
 def git_push_files(file_list: list, branch="main", commit_msg="auto futures update"):
@@ -128,5 +128,5 @@ if __name__ == '__main__':
     git_push()  # 将本地文件上传到GIT仓库
     # git_pull()  # 从GIT仓库拉取文件到本地项目文件夹
     # 单独拉取文件
-    # git_pull_single_file("core/monitor.py", branch="main")
+    # git_pull_single_file("core/trade.py", branch="main")
     pass

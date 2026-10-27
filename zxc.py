@@ -725,11 +725,16 @@ def check_rule(rule_info: dict, merged_cond: list, market_ctx: dict, rule_name: 
     # 打印该策略每一个条件明细（会同时打印公共条件的校验结果）
 
 
-    # print_context(f"--------策略[{rule_name}]条件明细-------- >>> [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]")
-    # for item in condition_detail:
-    #     status = "✅满足" if item["result"] else "❌不满足"
-    #     print_context(f"{status} | expr:{item['expr']} | desc:{item['desc']} | reason:{item['reason']} | actual:{item['actual']}")
-    # print_context(f"\n固定止盈值：{shared_data.pre_profit} 固定止损值： {shared_data.pre_loss} - 请与公共模块变量和下单参数表单校对！\n")
+    print_context(f"--------策略[{rule_name}]条件明细-------- >>> [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]")
+    for item in condition_detail:
+        status = "✅满足" if item["result"] else "❌不满足"
+        print_context(f"{status} | expr:{item['expr']} | desc:{item['desc']} | reason:{item['reason']} | actual:{item['actual']}")
+    try:
+        _pp = f"{shared_data.pre_profit:.2f}" if shared_data.pre_profit is not None else "None"
+        _pl = f"{shared_data.pre_loss:.2f}" if shared_data.pre_loss is not None else "None"
+    except Exception:
+        _pp, _pl = str(shared_data.pre_profit), str(shared_data.pre_loss)
+    print_context(f"\n固定止盈值：{_pp} 固定止损值： {_pl} - 请与公共模块变量和下单参数表单校对！\n")
     ok = len(fail_items) == 0
     return ok, fail_items, condition_detail
 
@@ -826,7 +831,19 @@ def select_best_trade_rule(ts_code: str, ctx=None):
     result_dict: {ts_code: {rule_id, priority, trade_params...}}，无命中返回 {}
     """
     if is_cooling() or not trade_flag() or is_trade_status():
-        print("\r策略分析暂停，可能的原因：1.非交易日（时段） 2.交易冷却期 3.合约交易中", flush=True, end="")
+        _r = []
+        if not trade_flag():
+            _r.append("非交易时段")
+        if is_cooling():
+            try:
+                with shared_data.variables_rlock:
+                    _vt = shared_data.valid_time
+                _r.append(f"冷却期至{_vt.strftime('%H:%M:%S')}")
+            except Exception:
+                _r.append("冷却期")
+        if is_trade_status():
+            _r.append(f"当前有持仓[{shared_data.ts_code}]")
+        print_context(f"⏸策略分析暂停 >>> {' | '.join(_r)}")
         shared_data.trade_menu_dict = {}
         return {}, {}
     if ctx is None:
@@ -836,17 +853,17 @@ def select_best_trade_rule(ts_code: str, ctx=None):
 
     # ==========新增打印逻辑开始==========
     hit_count = len(hit_rules)
-    # print_context(f"[{ts_code}] 正在从条件池进行策略评估，评估结果 >>> 命中策略数：{hit_count}")
+    print_context(f"[{ts_code}] 正在从条件池进行策略评估，评估结果 >>> 命中策略数：{hit_count}")
     for hit_rule_id in hit_rules:
         r_data = config_pool.get(hit_rule_id, {})  # type: ignore[index]
         prio = r_data.get("priority", 0)
-        # print_context(f"  命中策略 -> rule_id:{hit_rule_id}, priority:{prio}")
+        print_context(f"  命中策略 -> rule_id:{hit_rule_id}, priority:{prio}")
     # ==========新增打印逻辑结束==========
 
     best_rule_name = get_highest_priority_rule(hit_rules)
 
     if best_rule_name is None:
-        # print_context(f"[{ts_code}] 无最高优先级策略被选中")
+        print_context(f"[{ts_code}] 无最高优先级策略被选中")
         return {}, detail_map
 
     rule_data = config_pool[best_rule_name]  # type: ignore[index]
@@ -855,7 +872,7 @@ def select_best_trade_rule(ts_code: str, ctx=None):
     priority = rule_data.get("priority", 0)  # type: ignore[index]
 
     # 打印最终选中策略
-    # print_context(f"[{ts_code}] ✅已选最优策略:{best_rule_name}, priority:{priority}")
+    print_context(f"[{ts_code}] ✅已选最优策略:{best_rule_name}, priority:{priority}")
 
     out = {
         "rule_id": best_rule_name,
@@ -922,11 +939,12 @@ def order(ts_code=None):
                 reasons.append(f"| 交易冷却期 |")
             try:
                 if reasons:
-                    if not no_print:
-                        with shared_data.variables_rlock:
-                            v_time = shared_data.valid_time
-                        print_context(f"\n当前不满足交易条件，请等待...\n具体原因解析： {' '.join(reasons)}")
-                        no_print = True
+                    print(f"\r[{datetime.now().strftime('%H:%M:%S')}] 当前不满足交易条件: {' '.join(reasons)}", flush=True, end="")
+                    # if not no_print:
+                    #     with shared_data.variables_rlock:
+                    #         v_time = shared_data.valid_time
+                    #     print(f"\r当前不满足交易条件 - {' '.join(reasons)}", flush=True, end="")
+                    #     no_print = True
                     sleep(1)
                     continue
                 no_print = False

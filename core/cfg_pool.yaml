@@ -8,6 +8,8 @@ temp_params:
   temp_profit:
   temp_loss:
   valid_trade_interval: 3
+  temp_lots: 1
+  temp_hold_value: 0
 
 strategy_001:
   comment: 开盘下单配置参数>9:00-9:15 21:-21:15,大盘rise或者sideways,高开且K线为rise则买多并设置止盈固定值

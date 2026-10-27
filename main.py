@@ -3,7 +3,7 @@ from core.monitor import monitor_profit_loss
 from public import shared_data
 from log.trade_log import setup_trade_loggers, stop_queue_listener
 from public.print_context import print_context
-from core.connect_ths import check_ths_status, ths_watchdog
+from core.connect_ths import check_ths_status, ths_pre_check_thread
 from core.trade import order
 from data.collect_current_price import get_current_price
 from data.future_trend import merge_two_info_dict
@@ -19,7 +19,7 @@ from public.anti_screensaver import main_daemon
 from public.shared_data import clean_old_trade_db, default_lots_dict
 from audio.play_alert import *
 
-TIMEOUT_SEC = 10
+TIMEOUT_SEC = 6
 
 def global_exception_handler(exc_type, exc_value, exc_traceback):
     if issubclass(exc_type, KeyboardInterrupt):
@@ -488,8 +488,6 @@ def set_lot_size():
         return lot_result
 
 
-
-
 def init_shared_data(user_type, ts_code, target_days, trade_futures_list, get_price_interval=5):
     # sound_order()
     print_context("程序正在校验日期、时间 ······")
@@ -558,14 +556,14 @@ def main():
     monitor_thread = threading.Thread(target=monitor_profit_loss, name="MonitorThread", daemon=True)
     reget_open_price_thread = threading.Thread(target=reget_open_price, name="ReGetOpenPriceThread", daemon=True)
     anti_thread = threading.Thread(target=main_daemon, name="AntiThread", daemon=True)
-    watchdog = threading.Thread(target=ths_watchdog, name="WatchdogThread", daemon=True)
+    watchdog = threading.Thread(target=ths_pre_check_thread, name="WatchdogThread", daemon=True)
     # 统一全部start，消除时序分散问题
     price_thread.start()
     order_thread.start()
     monitor_thread.start()
     reget_open_price_thread.start()
     anti_thread.start()
-    # watchdog.start()
+    watchdog.start()
     print_context(f"✅ 所有量化交易线程启动成功 >>>\n"
                   f"获取期货品种即时行情线程-collect_current_price(PriceThread)\n"
                   f"订单线程-trade.order(OrderThread)\n"

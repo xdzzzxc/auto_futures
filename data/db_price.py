@@ -174,7 +174,7 @@ def batch_write_price(batch_list):
                 with sqlite3.connect(db_path, timeout=10) as conn:
                     conn.executemany(insert_sql, valid_all)
             trim_old_data(db_path)
-            print_context.print_context(f"\n✅ 批量写入完成：{db_path} 共{len(valid_all)}条")
+            # print_context.print_context(f"\n✅ 批量写入完成：{db_path} 共{len(valid_all)}条")
         except Exception as e:
             print_context.print_context(f"批量入库异常 db:{db_path} err:{e}")
 

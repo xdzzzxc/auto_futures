@@ -67,7 +67,7 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
         quote_list = list(quote_list)
         total_result = {}
 
-        print_context.print_context("[INFO] 开始休市时段检测，02:00~09:00将阻塞等待开盘...")
+        # print_context.print_context("[INFO] 开始休市时段检测，02:00~09:00将阻塞等待开盘...")
         while True:
             cur_time = datetime.now().strftime("%H:%M:%S")
             if is_in_restrict_time():
@@ -100,7 +100,7 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
                 sub_res = get_open_price(ts_code=code, url=url)
                 if sub_res:
                     total_result.update(sub_res)
-                    print_context.print_context(f"[INFO] 品种【{code}】处理完成，已合并结果")
+                    # print_context.print_context(f"[INFO] 品种【{code}】处理完成，已合并结果")
             except Exception as e:
                 print_context.print_context(f"[ERROR] 品种【{code}】处理异常: {str(e)}")
             sleep(random.uniform(1.2, 2.5))
@@ -109,7 +109,7 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
         return total_result
 
     # ===================== 下面全部是【单品种】逻辑 =====================
-    print_context.print_context(f"[INFO] ---- 进入单品种模式，目标品种：{ts_code} ----")
+    # print_context.print_context(f"[INFO] ---- 进入单品种模式，目标品种：{ts_code} ----")
     target_code = ts_code.lower()
 
     EXCHANGE_CODE = {
@@ -169,7 +169,7 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
         print_context.print_context(f"[INFO] force_network=True，跳过缓存读取，直接走网络请求")
 
     if found_local_file:
-        print_context.print_context(f"[INFO] 缓存命中成功")
+        # print_context.print_context(f"[INFO] 缓存命中成功")
         if is_night_session:
             if not os.path.exists(trade_cache_file):
                 print_context.print_context(f"[INFO] 夜盘：需要复制缓存生成交易日缓存文件")
@@ -177,7 +177,7 @@ def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.n
                 with open(trade_cache_file, "w", encoding="utf-8") as fp:
                     json.dump(data_item, fp, ensure_ascii=False, indent=4)
         shared_data.open_price = result_data
-        print_context.print_context(f"[INFO] 【{target_code}】缓存读取完毕，返回结果")
+        # print_context.print_context(f"[INFO] 【{target_code}】缓存读取完毕，返回结果")
         return result_data
 
     print_context.print_context(f"[INFO] 缓存未命中，准备发起网络请求拉取【{target_code}】")
