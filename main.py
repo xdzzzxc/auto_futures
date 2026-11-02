@@ -14,7 +14,7 @@ from data.data_from_sina import fetch_future_data
 from public.sync_time import sync_time
 from data.get_quote import get_open_price
 from data.db_price import flush_remain_buffer
-from data.reget_open_price import reget_open_price
+# from data.reget_open_price import reget_open_price
 from public.anti_screensaver import main_daemon
 from public.shared_data import clean_old_trade_db, default_lots_dict
 from audio.play_alert import *
@@ -554,7 +554,7 @@ def main():
     price_thread = threading.Thread(target=get_current_price, name="PriceThread", daemon=True)
     order_thread = threading.Thread(target=order, name="OrderThread", daemon=True)
     monitor_thread = threading.Thread(target=monitor_profit_loss, name="MonitorThread", daemon=True)
-    reget_open_price_thread = threading.Thread(target=reget_open_price, name="ReGetOpenPriceThread", daemon=True)
+    reget_open_price_thread = threading.Thread(target=get_open_price, name="ReGetOpenPriceThread", daemon=True)
     anti_thread = threading.Thread(target=main_daemon, name="AntiThread", daemon=True)
     watchdog = threading.Thread(target=ths_pre_check_thread, name="WatchdogThread", daemon=True)
     # 统一全部start，消除时序分散问题
@@ -584,6 +584,7 @@ def main():
         monitor_thread,
         reget_open_price_thread,
         anti_thread,
+        watchdog,
         open_price_thread
     ])
 

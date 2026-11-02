@@ -8,8 +8,8 @@ from time import sleep
 from public.shared_data import click_control
 
 # 取消时间间隔判断，固定满100条入库
-BUFFER_MAX_NUM = 100
-
+BUFFER_MAX_NUM_NORMAL = 100
+BUFFER_MAX_NUM_EARLY = 3  # 开盘前5分钟阈值：3条
 
 def get_current_price(ts_code="m2611"):
     from public.shared_data import simulate_input
@@ -81,6 +81,16 @@ def get_current_price(ts_code="m2611"):
             continue
         is_printed = False
 
+        # # ==========【新增：判断当前是否处于开盘前5分钟，选择入库阈值】==========
+        # now = datetime.now()
+        # hh = now.hour
+        # mm = now.minute
+        # in_early_window = False
+        # if (hh == 9 and mm < 5) or (hh == 21 and mm < 5):
+        #     in_early_window = True
+        # current_buf_limit = BUFFER_MAX_NUM_EARLY if in_early_window else BUFFER_MAX_NUM_NORMAL
+        # # ============================
+
         date_str = datetime.now().strftime("%Y%m%d%H%M%S")
         write_batch = None
         try:
@@ -98,18 +108,18 @@ def get_current_price(ts_code="m2611"):
             # 写入内存缓冲区
             with shared_data.buffer_lock:
                 shared_data.price_buffer.append(row)
-                # 唯一入库条件：缓存条数达到100条
-                if len(shared_data.price_buffer) >= BUFFER_MAX_NUM:
+                # # 按当前时段阈值入库：开盘前5分钟=3条，其余=100条
+                if len(shared_data.price_buffer) >= BUFFER_MAX_NUM_NORMAL:
                     write_batch = shared_data.price_buffer.copy()
                     shared_data.price_buffer.clear()
             # 执行批量写入
             if write_batch:
                 batch_write_price(write_batch)
-                print_context(f"[{datetime.now()}] 缓存满{BUFFER_MAX_NUM}条，批量入库，共{len(write_batch)}条")
+                print_context(f"[{datetime.now()}] 缓存满{BUFFER_MAX_NUM_NORMAL}条，批量入库，共{len(write_batch)}条")
         except Exception:
             sleep(0.2)
             continue
-        # 严格5秒读取一次价格
+        # 读取一次价格的时间间隔，由shared_data.get_price_interval确定
         sleep(shared_data.get_price_interval)
 
 if __name__ == "__main__":

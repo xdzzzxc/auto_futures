@@ -78,7 +78,6 @@ def auto_trade(trade_dir=None):
             click_position(controls["买多"][1])
             click_ok = True
         except Exception as e:
-            # click_control(text="买多", control_type="Text", click_btn=0)
             print_context(f"买多坐标点击失败，尝试文本查找方式：{str(e)}")
         if not click_ok:
             click_control(text="买多", control_type="Text", click_btn=0)
@@ -93,16 +92,14 @@ def auto_trade(trade_dir=None):
     cur_price = float(controls["即时价格"][0].window_text().strip())
     print_context(f"[{current_time.strftime('%H:%M:%S')}]程序已发送交易请求，正在等待市场撮合中......")
 
-    # ========== 新增：等待成交确认 ==========
+    # ========== 等待成交确认（只检测，不设置云单） ==========
     max_wait_sec = 30
     poll_interval = 0.5
     start_ts = time.time()
     filled = False
-    # target_contract_ctrl = None
     while time.time() - start_ts < max_wait_sec:
         sleep(poll_interval)
         status_ok = is_trade_status()
-        # target_contract_ctrl = find_target_contract_ctrl(shared_data.trade_window, fut_code=fut_code)
         if status_ok:
             filled = True
             break
@@ -112,14 +109,13 @@ def auto_trade(trade_dir=None):
         print_context(f"今日交易明细 - {get_today_trade_stat()}")
         with shared_data.variables_rlock:
             shared_data.valid_time = None
-        # 自动设置云止损单
-        set_loss_profit()
-
+        # ===== 关键：注释掉这里提前调用set_loss_profit() =====
+        # 原因：此时order线程还在auto_trade内部，loss_profit_param还没写入有效值，
+        # 提前调用会导致todo_list为空，白跑一趟。云单设置统一交给order线程末尾执行。
+        # set_loss_profit()
     else:
         print_context(f"❌[{datetime.now().strftime('%H:%M:%S')}]开仓等待{max_wait_sec}秒未检测到持仓，请检查委托是否成交")
-        # 未成交不清除冷却标记，保持现状
     return cur_price
-
 
 
 def monitor_profit_loss():
@@ -192,28 +188,36 @@ def monitor_profit_loss():
                 if original_pre_loss is not None:
                     shared_data.pre_loss = original_pre_loss
 
-    no_print = True
     print_context("MonitorThread 盈亏监控线程已启动，永久常驻运行")
+    flag_wait_market_print = True
+    flag_no_position_print = True
 
     while True:
         try:
             # 判断是否是在交易时段内，否则跳过循环，仅首次打印
             if not trade_flag():
-                if no_print:
-                    print_context(f"[{datetime.now().strftime('%H:%M:%S')}] 请等待期市开市！- 日市：9:00:00 | 夜市：21:00:00")
-                    no_print = False
+                if flag_wait_market_print:
+                    print_context(
+                        f"[{datetime.now().strftime('%H:%M:%S')}] 请等待期市开市！- 日市：9:00:00 | 夜市：21:00:00")
+                    flag_wait_market_print = False
+                    # 切回未开市时，无持仓标记重置，防止下次开市上来就不打印
+                    flag_no_position_print = True
                 sleep(1)
                 continue
 
+            # 已经开市，重置开市等待标记（离开未开市，下次再休市可以重新打印）
+            flag_wait_market_print = True
+
             # 判断是否存在持仓
             if not is_trade_status():
-                # print(f"\r>>> 无期货交易中，等待开仓！", flush=True, end="")
-                if no_print:
-                    print_context(f">>> 无期货交易中，等待开仓！")
-                    no_print = False
-                sleep(0.5)
+                if flag_no_position_print:
+                    print_context(f">>> [{datetime.now().strftime('%H:%M:%S')}] 无期货交易中，等待开仓！")
+                    flag_no_position_print = False
+                sleep(1)
                 continue
-            no_print = True
+
+            # 有持仓：重置无持仓标记，平仓回来可以再次打印
+            flag_no_position_print = True
 
             # 读取配置参数
             with shared_data.dict_rlock:
@@ -234,11 +238,12 @@ def monitor_profit_loss():
                     elif "手空仓" in profit_text:
                         shared_data.direction = "fall"
 
-                print(f"\r【监控信息[{datetime.now().strftime('%H:%M:%S')}]】 >>> 交易品种：{ts_code} {shared_data.tscode_lots_dict.get(ts_code)}手。 交易策略："
-                      f"{shared_data.trade_menu_dict.get('rule_id', 'unknow')} "
-                      f"多空：{shared_data.direction} 止盈阈值={pre_profit} 止损阈值={pre_loss} "
-                      f"云单（区分老仓信息）：{shared_data.trade_menu_dict}\033[K 浮动盈亏={profit:.2f}", flush=True, end="")
-
+                _hold_v = getattr(shared_data, "hold_value", None)
+                print(
+                    f"\r【监控信息[{datetime.now().strftime('%H:%M:%S')}]】 >>> 交易品种：{ts_code} {shared_data.tscode_lots_dict.get(ts_code)}手。 交易策略："
+                    f"{shared_data.trade_menu_dict.get('rule_id', 'unknow')} "
+                    f"多空：{shared_data.direction} 止盈阈值={pre_profit} 止损阈值={pre_loss} 云保本单（差值）={_hold_v} "
+                    f"浮动盈亏={profit:.2f}\033[K", flush=True, end="")
             except (ValueError, Exception) as e:
                 # 修改文案：区分读取控件异常，不再误导平仓完成
                 print(
@@ -246,11 +251,15 @@ def monitor_profit_loss():
                     flush=True, end="")
                 continue
 
-            # ========== 止盈止损判断 ==========
+            # ========== 止盈止损判断（增加手数放大，pre_profit/pre_loss保留单手原值） ==========
             strategy_id = shared_data.trade_menu_dict.get("rule_id", "unknow")
             trade_period = shared_data.trade_menu_dict.get("trade_period", "")
-            if pre_profit > 0 and profit >= pre_profit - 0.02:
-                close_reason = f"[{ts_code}]止盈平仓\n盈利：{profit}元(固定金额止盈)"
+            lots = shared_data.tscode_lots_dict.get(ts_code, 1)
+            total_pre_profit = pre_profit * lots
+            total_pre_loss = pre_loss * lots
+
+            if pre_profit > 0 and profit >= total_pre_profit - 0.02:
+                close_reason = f"[{ts_code}]止盈平仓，单手目标{pre_profit:.2f}，{lots}手合计目标{total_pre_profit:.2f}\n当前浮动盈利：{profit:.2f}元(固定金额止盈)"
                 with shared_data.dict_rlock:
                     shared_data.pre_profit = 0
                     shared_data.pre_loss = 0
@@ -258,10 +267,9 @@ def monitor_profit_loss():
                        original_pre_profit=original_pre_profit, original_pre_loss=original_pre_loss,
                        strategy_id=strategy_id, trade_period=trade_period)
                 print("量化程序已触发止盈平仓！")
-                # set_lots()
 
-            elif pre_loss < 0 and profit <= pre_loss + 0.02:
-                close_reason = f"[{ts_code}]止损平仓\n亏损：{profit}元(固定金额止损)"
+            elif pre_loss < 0 and profit <= total_pre_loss + 0.02:
+                close_reason = f"[{ts_code}]止损平仓，单手目标{pre_loss:.2f}，{lots}手合计目标{total_pre_loss:.2f}\n当前浮动亏损：{profit:.2f}元(固定金额止损)"
                 with shared_data.dict_rlock:
                     shared_data.pre_profit = 0
                     shared_data.pre_loss = 0
@@ -269,6 +277,7 @@ def monitor_profit_loss():
                        original_pre_profit=original_pre_profit, original_pre_loss=original_pre_loss,
                        strategy_id=strategy_id, trade_period=trade_period)
                 print("量化程序已触发止损平仓！")
+
                 # set_lots()
 
             sleep(MONITOR_INTERVAL)

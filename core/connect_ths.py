@@ -148,26 +148,31 @@ def auto_login(ths_window):
     软件已启动时，直接调用此函数即可，无需重复启动exe
     """
     # global subwindow
-
+    close_ad_windows()  # 功能更强大，替换close_ad_windows()
     # 定位期货户按钮
-    user_type_btn = ths_window.child_window(control_type='Button', title_re='期货户|期货用户')
+    user_type_btn = ths_window.child_window(control_type='Button', title_re='期货户', visible_only=True, found_index=0)
     shared_data.login_control.clear()
-    shared_data.login_control['期货户'] = [
-        user_type_btn, user_type_btn.rectangle()]
+    rect = user_type_btn.rectangle()
+    shared_data.login_control['期货户'] = [user_type_btn, rect]
+    print_context(f"user_type_btn.rectangle:{rect}")
 
     if not user_type_btn.is_enabled():
         restart_ths()
         ths_window = shared_data.trade_window
         ths_window.set_focus()
         ths_window.maximize()
-        user_type_btn = ths_window.child_window(control_type='Button', title='期货户')
+        user_type_btn = ths_window.child_window(control_type='Button', title='期货户', visible_only=True, found_index=0)
+        rect = user_type_btn.rectangle()
         shared_data.login_control.clear()
-        shared_data.login_control['期货户'] = [user_type_btn, user_type_btn.rectangle()]
+        shared_data.login_control['期货户'] = [user_type_btn, rect]
+        print_context(f"user_type_btn.rectangle:{rect}")
 
-    # close_ad_windows()
-    close_ad_windows()  # 功能更强大，替换close_ad_windows()
-    # 唤起登录弹窗
-    shared_data.login_control['期货户'][0].click_input()
+    close_ad_windows()
+    # 【改用屏幕坐标中心点击，绕过click_input阻塞】
+    cx = (rect.left + rect.right) // 2
+    cy = (rect.top + rect.bottom) // 2
+    print_context(f"期货户按钮中心点击坐标：x={cx}, y={cy}")
+    mouse.click(button='left', coords=(cx, cy))
     sleep(2)
 
     # 等待登录弹窗出现
@@ -177,7 +182,7 @@ def auto_login(ths_window):
     # desktop = Desktop(backend="uia")
     subwindow = None
     while not exist_flag and wait_cnt < max_wait:
-        close_ad_windows()  # 每次循环都要清理一下广告弹窗
+        # close_ad_windows()  # 每次循环都要清理一下广告弹窗
         try:
             subwindow = ths_window.child_window(title="同花顺期货通交易", control_type="Window")
             # subwindow = desktop.window(title_re=r".*同花顺期货通交易.*", control_type="Window", timeout=1)
@@ -199,7 +204,7 @@ def auto_login(ths_window):
 
     # 展开账号下拉列表
     shared_data.login_control['选择用户'][0].click_input()
-    sleep(random.uniform(0.5, 1))
+    sleep(random.uniform(0.4, 0.6))
 
     # 账号文本控件
     user_type = subwindow.descendants(control_type='Text')
@@ -496,11 +501,21 @@ def set_loss_profit(param: dict = None):
         else:
             param = param.copy()
 
-    fut_code = shared_data.ts_code or "m2701"
+    fut_code = shared_data.ts_code or shared_data.default_tscode
     print_context(f"[set_loss_profit快照｜{fut_code}] raw param: {param}")
 
     # 清洗参数，规避 None>0 报错，统一判断语义
-    todo_list = []
+    with shared_data.dict_rlock:
+        if param is None:
+            param = shared_data.loss_profit_param.copy()
+        else:
+            param = param.copy()
+
+    fut_code = shared_data.ts_code or shared_data.default_tscode
+    print_context(f"[set_loss_profit快照｜{fut_code}] raw param: {param}")
+
+    # 清洗参数，规避 None>0 报错，统一判断语义
+    todo_list = []  # 云单设置列表
     for drill_type, raw_val in param.items():
         val = None
         if raw_val is not None:
@@ -605,101 +620,6 @@ def set_loss_profit(param: dict = None):
             continue
 
 
-
-# def set_loss_profit(param: dict = None):
-#     """
-#     设置云止损止盈保本单；内部函数封装单条设置逻辑，每条完整重新打开弹窗
-#     """
-#     set_mapping = {"云止损单": 0, "云止盈单": 1, "云保本单": 2}
-#     if param is None:
-#         param = shared_data.loss_profit_param.copy()
-#
-#     fut_code = shared_data.ts_code or "m2701"
-#
-#     # 1. 先过滤出真正需要设置的项
-#     todo_list = []
-#     for drill_type, price in param.items():
-#         if price > 0:
-#             todo_list.append((drill_type, price))
-#         else:
-#             print(f"跳过[{fut_code} {drill_type}] 设置！")
-#     if not todo_list:
-#         print(f"[{fut_code}] 没有需要设置的云止损/止盈参数，直接返回")
-#         return
-#
-#     # -------- 连接窗口 --------
-#     ths_window = None
-#     app = None
-#     if shared_data.trade_window is not None:
-#         ths_window = shared_data.trade_window
-#         app = ths_window.app
-#     else:
-#         ths_pid = get_happ_pid()
-#         app = Application(backend="uia").connect(process=ths_pid, timeout=10)
-#         ths_window = app.top_window()
-#     ths_window.set_focus()
-#     ths_window.maximize()
-#     area_left, area_top, area_w, area_h = 680, 794, 48, 17
-#     area_right = area_left + area_w
-#     area_bottom = area_top + area_h
-#     # 开始设置云止损止盈保本单
-#     wait_total_sec = 60
-#     start_time = time.time()
-#     target_ctrl = None
-#     found = False
-#     # 这里必须先点击"持仓"控件，确保进入持仓面版才可以定位含有期货品种代码的控件
-#     click_position(rect_tuple=(534, 747, 574, 766))
-#     print_context(f"[{fut_code}] 开始等待成交确认控件，区域({area_left},{area_top})，最长等待{wait_total_sec}s...")
-#     while time.time() - start_time < wait_total_sec:
-#         try:
-#             # 获取窗口所有后代控件
-#             all_ctrls = ths_window.descendants()
-#             for ctrl in all_ctrls:
-#                 try:
-#                     rect = ctrl.rectangle()
-#                     # 判断控件是否落在目标矩形框内
-#                     ctrl_in_area = (
-#                             area_left <= rect.left <= area_right
-#                             and area_top <= rect.top <= area_bottom
-#                     )
-#                     if not ctrl_in_area:
-#                         continue
-#                     # 获取控件文本，转小写匹配合约
-#                     ctrl_text = ctrl.window_text().strip().lower()
-#                     if fut_code.lower() in ctrl_text:
-#                         target_ctrl = ctrl
-#                         found = True
-#                         break
-#                 except Exception:
-#                     # 部分控件无法读取rect/window_text，直接跳过
-#                     continue
-#             if found:
-#                 break
-#         except Exception as e:
-#             print_context(f"检索控件异常: {str(e)}")
-#
-#         # 轮询间隔，不要爆循环，0.8s一次足够，降低CPU
-#         time.sleep(0.8)
-#
-#     if not found or target_ctrl is None:
-#         sound_warn()  # 警告音
-#         cancel_trade()  # 撤单：在60秒延时未达成交易则程序自动撤单
-#         print_context(f"[{fut_code}] 等待成交确认控件超时{wait_total_sec}s，未找到合约控件，放弃本次云止损止盈设置！")
-#         # 在try--except中进行撤单操作
-#         return
-#     print_context(f"[{fut_code}] ✅ 成功定位成交确认控件，文本：{target_ctrl.window_text()}，继续设置云止损止盈")
-#     # 云设置
-#     # print(todo_list)
-#     try:
-#         ths_window.set_focus()
-#         ths_window.maximize()
-#     except Exception as e:
-#         print_context("设置云单时出现窗口或相关控件定位异常！")
-#     for item in todo_list:
-#         set_cloud_bills(cloud_type=set_mapping[item[0]], set_value=item[1])
-#         print_context(f"成功设置[{shared_data.ts_code}] {item[0]}: {item[1]}")
-    
-
 def ths_pre_check_thread():
     """
     开市预检线程（main.py开启子线程运行）
@@ -710,10 +630,10 @@ def ths_pre_check_thread():
     """
     # 预检窗口 (时,分)，每个窗口是 HH:MM:00 ~ HH:MM:59
     check_time_list = [
-        (8, 58),
-        (10, 28),
-        (13, 28),
-        (20, 58)
+        (8, 59),
+        (10, 29),
+        (13, 29),
+        (20, 59)
     ]
     # 标记：当前时段是否已经执行过恢复，防止一分钟内多次触发check_ths_status
     session_done = set()
@@ -772,17 +692,18 @@ def ths_pre_check_thread():
                     check_ths_status()
                 session_done.add(session_key)
 
-        # 窗口内固定20s轮询间隔
-        time.sleep(25)
+        # 窗口内固定10s轮询间隔
+        time.sleep(10)
 
 
 
 
 
 if __name__ == '__main__':
+    # auto_login()
     # check_ths_status()
     # local_control()
-    # set_loss_profit()
-    ths_pre_check_thread()
+    set_loss_profit()
+    # ths_pre_check_thread()
     pass
 

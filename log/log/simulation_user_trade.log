@@ -51009,3 +51009,49 @@ RuntimeError: 连接同花顺窗口超时，已重试3次，请检查程序是�
 2026-10-26 21:21:50 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
 2026-10-26 22:07:14 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
 2026-10-27 06:58:31 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-27 20:29:50 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-28 08:37:13 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-28 21:28:07 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-28 21:36:10 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-29 09:42:46 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-29 10:52:56 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-29 11:21:26 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-29 14:31:39 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-29 14:47:14 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-29 14:56:42 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-30 13:55:58 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-30 14:02:53 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-30 14:14:06 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-30 14:43:14 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-30 14:44:44 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-30 14:46:30 - simulation_user - CRITICAL - main.py[33] global_exception_handler - trace_id=- - 【全局未捕获异常】程序崩溃
+Traceback (most recent call last):
+  File "E:\auto_futures\main.py", line 599, in <module>
+    main()
+  File "E:\auto_futures\main.py", line 547, in main
+    init_shared_data(user_type=0,
+  File "E:\auto_futures\main.py", line 515, in init_shared_data
+    check_ths_status()  # 检查同花顺期货通启动状态
+  File "E:\auto_futures\core\connect_ths.py", line 273, in check_ths_status
+    local_control()
+  File "E:\auto_futures\core\connect_ths.py", line 451, in local_control
+    code_ctrl = shared_data.ths_common_control['期货代码'][0]
+TypeError: 'NoneType' object is not subscriptable
+2026-10-30 14:47:22 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-30 19:18:23 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-30 19:24:23 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-30 21:17:17 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-30 21:21:34 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-30 22:18:05 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-30 22:30:02 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-30 22:56:23 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-10-31 08:40:53 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-01 17:44:23 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-02 08:27:37 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-02 08:54:50 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-02 12:33:26 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-02 15:03:00 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-02 15:11:57 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-02 15:21:54 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-02 21:36:54 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-02 22:10:10 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序

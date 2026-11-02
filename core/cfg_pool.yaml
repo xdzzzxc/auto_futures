@@ -5,22 +5,23 @@ common_conditions:
   - expr: "not is_cooling()"
 
 temp_params:
-  temp_profit:
-  temp_loss:
+  temp_profit: 30
+  temp_loss: 0
   valid_trade_interval: 3
+  temp_tscode: {"m2701": 1}
   temp_lots: 1
   temp_hold_value: 0
+  temp_direction: ""
 
 strategy_001:
-  comment: 开盘下单配置参数>9:00-9:15 21:-21:15,大盘rise或者sideways,高开且K线为rise则买多并设置止盈固定值
+  comment: 开盘下单配置参数>9:00-9:05 21:00-21:05,大盘rise或者sideways,高开且K线为rise则买多并设置止盈固定值
   enable: true
   trade_period: 第一交易时段-开盘
   priority: 100
   conditions:
     - expr: 'market_trend == "rise" or market_trend == "sideways"'
       enable: true
-    - expr: '(hour == 9 and minute < 15 and not night_trading) or (hour == 21 and
-        minute < 15)'
+    - expr: '(hour == 9 and minute < 5) or (hour == 21 and minute < 5)'
       enable: true
       desc: "限制在开盘的15分钟内下单"
     - expr: '(today_open >= pre_settle_hist) or (today_open >= pre_close)'

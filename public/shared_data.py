@@ -15,13 +15,14 @@ import time
 import psutil
 from pywinauto import Application
 
+
 # 创建类型重入锁
 deque_lock = threading.Lock()
 variables_rlock = threading.RLock()
 ctrl_rlock = threading.RLock()
 db_rlock = threading.RLock()
 dict_rlock = threading.RLock()
-
+cur_price_deque = deque(maxlen=200)  # 9:05和21:05以前用这里的数据
 user_type = 0  # 0-模拟用户  1-国泰君安期货用户
 user_name = {0: "模拟交易-1811889418", 1: "国泰君安_CTP85415809"}  # 模拟交易-1811889418 国泰君安_CTP85415809
 trade_window = None  # 同花顺交易平台桌面对象
@@ -37,11 +38,12 @@ market_ctx_dict = {}  # cfg_pool.yaml文件读写上下文命名空间
 
 # 期货品种即时行情价格缓冲区及相关安全配置
 get_price_interval = 2  # 从同花顺窗口读取即时价格的时间间隔，默认为2秒
-k_minutes = 3  # 设置指定时长的最后一根K线的时间
+k_minutes = 3  # 设置指定时长的最后一根K线的时间（分钟）
 current_price_dict = {}  # 即时行情中的期货商品买卖价格
-cur_price_deque = deque(maxlen=20000)
-price_buffer = []  # 缓冲区
-buffer_lock = threading.Lock()  # 缓冲锁
+
+price_buffer = []  # 即时价格数据缓冲区
+
+buffer_lock = threading.Lock()  # 缓冲锁,写入db库专用锁
 last_flush_ts = time.time()  # 上次写入的时间戳
 analyze_interval = 60  # 读取数据库数据的频率
 analyze_interval_lock = threading.Lock()  # 加锁
@@ -59,8 +61,8 @@ ths_common_control = {}  # 交易平台常用控件字典,此处为多进程管�
 condition_control = {}  # 条件单窗口控件映射字典
 logger: logging.Logger | None = None  # 根据用户选择的日志器
 quote_list = {"m2701", "c2701"}  # 默认要从东方财富网获取开盘价等信息的期货品种
-ts_code = "m2701"  # 期货商品代码（如au2601)通过人工手动选择后作为本次交易主体品种
-default_tscode = "m2701"  # 当在无人进入期货交易时，自动选择该期货品种作为当日的交易品种
+ts_code = ""  # 期货商品代码（如au2601)通过人工手动选择后作为本次交易主体品种
+default_tscode = "c2701"  # 当在无人进入期货交易时，自动选择该期货品种作为当日的交易品种
 # search_future_list = []  # 待搜索的期货商品代码列表
 open_price = {}  # 交易品种开盘价信息：trade.order()
 pre_profit = 80  # 手动设置固定止盈值
@@ -75,7 +77,8 @@ direction = direction_dict.get(ts_code, "sideways")  # 如果有专业推荐，�
 
 history_trade_df = None  # 期货品种历史交易原始数据，dataframe格式；
 history_data_analysis = None  # 期货商品历史交易数据，来源于future_data模块
-loss_profit_param = {"云止损单": 0, "云止盈单": 0, "云保本单": 0}  # 对应止损止盈设置
+trade_price = None  # monitor.auto_trade()函数运行返回的即时市场交易价
+loss_profit_param = {"云止损单": 2224, "云止盈单": 2250, "云保本单": 6}  # 对应止损止盈设置
 future_quote_dict = {}  # 期货行情 https://push2.eastmoney.com/api/qt/ulist.np/get
 future_info_dict = {}  # 期货资讯行情
 # "交易方向", "交易价", "止损价", "止盈价", "交易前总额", "交易后总额", "利润"
@@ -145,10 +148,10 @@ def is_cooling() -> bool:
     cooling_str = cooling_time.strftime("%H:%M:%S")
 
     if now < cooling_time:
-        print(f"\r[冷却] 当前:{now_str},冷却截止:{cooling_str},冷却中=True", flush=True, end="")
+        # print(f"\r[冷却] 当前:{now_str},冷却截止:{cooling_str},冷却中=True", flush=True, end="")
         return True
     else:
-        print(f"\r[冷却] 当前:{now_str},冷却截止:{cooling_str},冷却结束=False ✅冷却放行", flush=True, end="")
+        # print(f"\r[冷却] 当前:{now_str},冷却截止:{cooling_str},冷却结束=False ✅冷却放行", flush=True, end="")
         return False
 
 def is_trade_status() -> bool:
@@ -575,12 +578,13 @@ def clean_old_trade_db(db_folder_path: str = None, dry_run: bool = True):
     return None
 
 
-
 if __name__ == "__main__":
+
     # print_context(f"今天是：{datetime.now().strftime('%Y/%m/%d %H:%M:%S')},期货交易：{is_trade_period}")
     # print(default_futures)
     # get_direction()
     # click_position(rect_tuple=(100,100,200,200))
     # print(is_trade_status())
     # click_control(text="锁仓", control_type="Text", click_btn=0)
+
     pass
