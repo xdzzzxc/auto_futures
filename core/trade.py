@@ -182,16 +182,30 @@ def sync_temp_params(new_pool: dict):
     temp_profit = temp_params.get("temp_profit")
     temp_loss = temp_params.get("temp_loss")
     temp_valid_trade_interval = temp_params.get("valid_trade_interval")
-    lots = temp_params.get("temp_lots")
+    lots = temp_params.get("temp_lots", 1)
     temp_hold_value = temp_params.get("temp_hold_value")
     temp_direction = temp_params.get("temp_direction", "")
+    temp_tscode = temp_params.get("temp_tscode", "")
+    if temp_tscode:
+        with variables_rlock:
+            shared_data.ts_code = temp_tscode
+            print_context(f"✅[临时参数热更新] [shared_data.ts_code]交易品种变更为：{temp_tscode}")
+    else:
+        with variables_rlock:
+            print_context(f"已选择的交易品种（shared_data.ts_code）：{shared_data.ts_code}")
     with variables_rlock:
         if temp_direction:
-            shared_data.direction = temp_params.get("temp_direction")
-            print_context(f"✅[临时参数热更新] [{shared_data.ts_code}]大盘走势：{temp_direction}")
-        if temp_hold_value:
-            shared_data.hold_value = int(temp_hold_value)
-            print_context(f"✅[临时参数热更新] [{shared_data.ts_code}]交易保本差值临时修改为：{int(temp_hold_value)}")
+            with variables_rlock:
+                shared_data.direction = temp_params.get("temp_direction")
+                print_context(f"✅[临时参数热更新] [{shared_data.ts_code}]大盘走势已变更为：{temp_direction}")
+        else:
+            with variables_rlock:
+                print_context(f"[{shared_data.ts_code}]今日交易大盘方向（已选）：{shared_data.direction}")
+        if temp_hold_value > 1:
+            with variables_rlock:
+                shared_data.hold_value = int(temp_hold_value)
+                print_context(f"✅[临时参数热更新] [{shared_data.ts_code}]交易保本差值临时修改为：{int(temp_hold_value)},只能在下次交易时生效！")
+
     with shared_data.variables_rlock:
         # valid_trade_interval：不管有没有持仓，只要不为null就更新
         if temp_valid_trade_interval is not None:
@@ -222,6 +236,14 @@ def sync_temp_params(new_pool: dict):
 
         # 持仓状态：temp_profit不为null，直接赋值，不再对比新旧值
         lots = shared_data.tscode_lots_dict.get(shared_data.ts_code, 1)
+        if lots > 1:
+            try:
+                with variables_rlock:
+                    shared_data.tscode_lots_dict[shared_data.ts_code] = int(lots)
+                    shared_data.lot_size = lots
+                print_context(f"✅[临时参数热更新] [{shared_data.ts_code}]交易手数变更为：{lots}手")
+            except (ValueError, TypeError):
+                print_context(f"❌[临时参数] lot_size 数值解析失败: {lots}")
         if temp_profit is not None:
             try:
                 tp_val = float(temp_profit) * lots
@@ -924,7 +946,7 @@ def order(ts_code=None):
             config_pool = load_config_pool(CFG_POOL_PATH)
             if os.path.exists(CFG_POOL_PATH):
                 _last_cfg_mtime = os.stat(CFG_POOL_PATH).st_mtime
-        no_print = False
+        no_print = 0
         while not stop_flag:
             # 每轮循环开头自动检测yaml文件变更，热重载策略池
             auto_reload_cfg_if_changed()
@@ -950,16 +972,14 @@ def order(ts_code=None):
                 reasons.append(f"| 交易冷却期 |")
             try:
                 if reasons:
-                    # print(f"\r[{datetime.now().strftime('%H:%M:%S')}] 当前不满足交易条件: {' '.join(reasons)}", flush=True, end="")
-                    if not no_print:
+                    if no_print > 10:
                         with shared_data.variables_rlock:
                             v_time = shared_data.valid_time
                         print(f"\r[{datetime.now().strftime('%H:%M:%S')}]-当前不满足交易条件 - {' '.join(reasons)}", flush=True, end="")
-                        no_print = True
+                        no_print = 0
                     sleep(1)
                     continue
-                no_print = False
-                # print_context(f"现在可以进行正常期货交易，拟交易品种 - {ts_code}")
+                no_print += 1
 
                 signal_res, detail_map = select_best_trade_rule(ts_code)
                 if signal_res:
@@ -1096,9 +1116,17 @@ def order(ts_code=None):
                             if shared_data.pre_profit > 0 and coefficient > 0:
                                 candidate_B = shared_data.pre_profit * 0.9 / coefficient
 
-                            # 两个候选里取有效值的最大值
-                            pick_spread = max(candidate_A, candidate_B)
-                            final_cloud_break = int(pick_spread) if pick_spread > 0 else 0  #
+                            # ---------------- temp_hold_value 优先逻辑【新增】----------------
+                            temp_params = config_pool.get("temp_params", {})
+                            temp_hold_val = temp_params.get("temp_hold_value", 0)
+                            if temp_hold_val > 0:
+                                pick_spread = temp_hold_val
+                                print_context(f"📌临时参数生效：temp_hold_value={temp_hold_val}，跳过自动保本测算")
+                            else:
+                                pick_spread = max(candidate_A, candidate_B)
+                            # ----------------------------------------------------------------
+
+                            final_cloud_break = int(pick_spread) if pick_spread > 0 else 0
 
                             print_context(
                                 f"📐保本差值测算: candidate_A(云价价差)={candidate_A:.2f}, "
@@ -1115,10 +1143,13 @@ def order(ts_code=None):
 
                             # 下单时务必打印完整设置信息
                             set_msg = (
-                                f"【下单设置详情 - {'模拟用户' if shared_data.user_type == 0 else '君安用户'}】 | 交易持仓时间： {datetime.now().strftime('%H:%M:%S')}\n品种:{ts_code},方向:{trade_dir},手数lot_size={lot_size}\n"
-                                f"成交参考价cur_price={cur_price:.2f} 固定止盈值：{shared_data.pre_profit:.2f} 固定止损值：{shared_data.pre_loss:.2f}\n"
-                                f"计算止盈盈亏calc_profit_val={calc_profit_val:.2f}元\n"
-                                f"shared_data.pre_profit={shared_data.pre_profit:.2f}, shared_data.pre_loss={shared_data.pre_loss:.2f}\n"
+                                f"【下单设置详情 - {'模拟用户' if shared_data.user_type == 0 else '君安用户'}】 | "
+                                f"交易持仓时间： {datetime.now().strftime('%H:%M:%S')}\n品种:{ts_code},"
+                                f"方向:{trade_dir},手数lot_size={lot_size}\n"
+                                f"成交参考价cur_price={cur_price:.2f} 固定止盈(期值)：{shared_data.pre_profit:.2f} "
+                                f"固定止损(期值)：{shared_data.pre_loss:.2f}\n"
+                                f"止盈盈亏(差价)={calc_profit_val:.2f}元\n"
+                                f"交易价：{shared_data.trade_menu_dict.get('trade_time', '----')}\n"
                                 f"云止盈价={final_cloud_profit},云止损价={final_cloud_loss},云保本差价={final_cloud_break}"
                             )
                             print_context(f"{set_msg}")
@@ -1146,12 +1177,10 @@ def order(ts_code=None):
             except Exception as e:
                 err_txt = f"order线程顶层异常：{str(e)}\n{traceback.format_exc()}"
                 print(err_txt, flush=True)
-                # print_context(err_txt)
                 sleep(1)
     except Exception as e:
         err_txt = f"order线程顶层异常：{str(e)}\n{traceback.format_exc()}"
         print(err_txt, flush=True)
-
 
 
 

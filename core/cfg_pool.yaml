@@ -6,22 +6,22 @@ common_conditions:
 
 temp_params:
   temp_profit: 30
-  temp_loss: 0
+  temp_loss: -200
   valid_trade_interval: 3
-  temp_tscode: {"m2701": 1}
+  temp_tscode: ""
   temp_lots: 1
-  temp_hold_value: 0
+  temp_hold_value: 5
   temp_direction: ""
 
 strategy_001:
   comment: 开盘下单配置参数>9:00-9:05 21:00-21:05,大盘rise或者sideways,高开且K线为rise则买多并设置止盈固定值
   enable: true
   trade_period: 第一交易时段-开盘
-  priority: 100
+  priority: 1000
   conditions:
     - expr: 'market_trend == "rise" or market_trend == "sideways"'
       enable: true
-    - expr: '(hour == 9 and minute < 5) or (hour == 21 and minute < 5)'
+    - expr: '(hour == 9 and minute < 15) or (hour == 21 and minute < 15)'
       enable: true
       desc: "限制在开盘的15分钟内下单"
     - expr: '(today_open >= pre_settle_hist) or (today_open >= pre_close)'
@@ -43,11 +43,10 @@ strategy_002:
   comment: 开盘下单配置参数>9:00-9:15 21:-21:15,大盘fall或sideways,低开且K线为fall则卖空并设置止盈固定值
   enable: true
   trade_period: 第一交易时段-开盘
-  priority: 100
+  priority: 1000
   conditions:
     - expr: 'market_trend == "fall" or market_trend == "sideways"'
-    - expr: '(hour == 9 and minute < 15 and not night_trading) or (hour == 21 and
-        minute < 15)'
+    - expr: '(hour == 9 and minute < 15) or (hour == 21 and minute < 15)'
     - expr: '(today_open <= pre_settle_hist) or (today_open <= pre_close)'
     - expr: 'latest_k_trend == "fall"'
     - expr: 'last_price > today_open - (history_min_low_open or round(history_avg_low_open
@@ -66,7 +65,7 @@ strategy_003:
     21:-21:15,虚开情况(高开走低或低开走高),无论大盘走势,前1分钟K线为rise则买多,为fall则卖空,并设置止盈固定值50
   enable: true
   trade_period: 第一交易时段-开盘
-  priority: 101
+  priority: 1000
   conditions:
     - expr: "market_trend != ''"  # 启动程序时有可能没有大盘走势数据,所以这里不限制大盘走势，但有可能是空数据,所以要判断大盘走势不为空
     - expr: '(hour == 9 and minute < 15 and not night_trading) or (hour == 21 and
@@ -249,7 +248,7 @@ strategy_013:
   conditions:
     - expr: 'latest_k_trend == "rise"'
   trade_params:
-    pre_profit: "40 + trade_fee * 2"
+    pre_profit: "50 + trade_fee * 2"
     pre_loss: "0"
     trade_direction: '"rise"'
     profit_price: "last_price + 10"
@@ -262,7 +261,7 @@ strategy_014:
   conditions:
     - expr: 'latest_k_trend == "fall"'
   trade_params:
-    pre_profit: "40 + trade_fee * 2"
+    pre_profit: "50 + trade_fee * 2"
     pre_loss: "0"
     trade_direction: '"fall"'
     profit_price: "last_price - 10"

@@ -11,7 +11,9 @@ from pywinauto.findwindows import ElementNotFoundError
 import psutil
 from public.print_context import print_context
 from public import shared_data
-from public.shared_data import simulate_input, trade_flag, is_trade_status, set_lots, click_position, condition_control
+from public.shared_data import (simulate_input, trade_flag, is_trade_status,
+                                set_lots, click_position, condition_control, connect_ths)
+
 from pywinauto import mouse
 from typing import cast
 import threading
@@ -40,24 +42,7 @@ ths_common_ctrls_dict = {'用户名': (18, 721, 155, 738, "模拟交易国泰君
 
 exchange_ctrl_dict = {"上期所": (), "大商所": (), "郑商所": (), "上能源": (), "广期所": ()}
 
-# 新增工具函数
-# def get_foreground_hwnd():
-#     return user32.GetForegroundWindow()
-#
-# def ensure_window_focus(hwnd, retry=3, delay=0.3) -> bool:
-#     """
-#     确保目标窗口为前台焦点窗口
-#     :param hwnd: 窗口句柄
-#     :param retry: 重试次数
-#     :param delay: 每次重试等待
-#     :return: True成功获取焦点 / False失败
-#     """
-#     for _ in range(retry):
-#         if get_foreground_hwnd() == hwnd:
-#             return True
-#         user32.SetForegroundWindow(hwnd)
-#         time.sleep(delay)
-#     return False
+
 def kill_ths_background_processes():
     """杀死同花顺残留 happ.exe / HDP.exe"""
     kill_list = {"happ.exe", "hdp.exe"}
@@ -343,6 +328,7 @@ def local_control():
         ths_window = app.window(handle=main_handle)
         ths_window.wait('visible', timeout=2)
         shared_data.trade_window = ths_window
+        # ths_window = connect_ths()
         ths_window.set_focus()
         ths_window.maximize()
         # print_context(">>> 主窗口句柄连接成功，预留2s等待Chromium UIA树稳定")
@@ -702,8 +688,8 @@ def ths_pre_check_thread():
 if __name__ == '__main__':
     # auto_login()
     # check_ths_status()
-    # local_control()
-    set_loss_profit()
+    local_control()
+    # set_loss_profit()
     # ths_pre_check_thread()
     pass
 

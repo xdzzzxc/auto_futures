@@ -7,24 +7,42 @@ from public import shared_data
 from public.anti_screensaver import kill_blacklist_process
 from public.print_context import print_context
 from sendmsg.pushplus import send_msg
-from public.shared_data import click_position, is_trade_status, trade_flag, get_data_cache_dir, click_control, set_lots
+from public.shared_data import (click_position, is_trade_status, trade_flag,
+                                get_data_cache_dir, click_control, set_lots,
+                                variables_rlock, trade_window, connect_ths)
 from log.trade_log import setup_trade_loggers
 import os, json
 # 导入计数写入函数
 from core.private import append_close_record
 from core.connect_ths import set_loss_profit
 from public.jiaoyisuo import get_future_info
-
+from public.jiaoyisuo import get_future_info
 
 logger = setup_trade_loggers()
-
+#
 UI_DELAY_SHORT = 0.2
 MONITOR_INTERVAL = 0.5
-NO_HOLD_PRINT_INTERVAL = 6000  # 无持仓每60秒打印一次，不刷屏
+# NO_HOLD_PRINT_INTERVAL = 6000  # 无持仓每60秒打印一次，不刷屏
 TRADE_INTERVAL = shared_data.valid_trade_interval if shared_data.valid_trade_interval else 300
 
 
 # 新增：读取trade_log.json获取今日交易次数、累计盈亏
+def get_profit_loss_ctrl():
+    with variables_rlock:
+        ts_code = shared_data.ts_code or shared_data.default_tscode
+    ts_code_cn = get_future_info(ts_code).get("name", "")
+    find_code_full_code = ts_code_cn + ts_code[-4:] + r".*手.*仓.*"
+    ths_window = trade_window or connect_ths()
+    # 关键：descendants 代替 child_window，避免多匹配歧义报错
+    candidates = ths_window.descendants(control_type="Text", title_re=find_code_full_code)
+    if not candidates:
+        raise ElementNotFoundError(f"未找到持仓行控件：{find_code_full_code}")
+    return candidates[0]
+
+
+
+
+
 def get_today_trade_stat():
     log_path = os.path.join(get_data_cache_dir(), "trade_log","trade_log.json")
     today_str = datetime.now().strftime("%Y%m%d")
@@ -120,14 +138,13 @@ def auto_trade(trade_dir=None):
 
 def monitor_profit_loss():
     from core.trade import reset_temp_params_in_yaml
-    # ========== 启动监控时一次性读取平仓控件坐标 ==========
+
     try:
         close_ctrl_position = shared_data.ths_common_control['平仓'][1]
     except Exception as e:
         print_context(f"monitor_profit_loss 获取平仓控件失败:{str(e)}")
         return
 
-    # ============== 自动平仓执行函数，签名不变 ==============
     def _trade(msg, ts_code_arg: str, profit_arg: float,
                strategy_id: str, trade_period: str,
                original_pre_profit=None, original_pre_loss=None,
@@ -138,13 +155,11 @@ def monitor_profit_loss():
                 shared_data.trade_window.set_focus()
                 sleep(0.5)
                 result = click_position(close_ctrl_position)
-            # 取本次平仓对应的手数
             lots = shared_data.tscode_lots_dict.get(ts_code_arg, 1)
-            # 读取品种费率，计算双边手续费（和order里口径保持一致）
             fut_info = get_future_info(ts_code_arg, 0)
             per_lot_two_way_fee = fut_info.get('fee', 0) * 2
             total_fee = per_lot_two_way_fee * lots
-            net_profit = profit_arg - total_fee  # 纯利润 = 界面毛盈亏 - 双边手续费
+            net_profit = profit_arg - total_fee
 
             if result:
                 print_context("_trade: 程序已根据止损止盈设置值完成自动平仓！")
@@ -152,7 +167,6 @@ def monitor_profit_loss():
                     shared_data.valid_time = datetime.now() + timedelta(minutes=shared_data.valid_trade_interval)
                     print_context(f"【平仓点击成功，设置冷却】下次交易有效时间起点：{shared_data.valid_time}")
 
-                # 仅平仓点击成功才写入记录、统计、推送成功消息、重置参数
                 ut = getattr(shared_data, "user_type", 0)
                 append_close_record(user_type=ut, pnl=profit_arg, ts_code=ts_code_arg,
                                     strategy_id=strategy_id, trade_period=trade_period)
@@ -174,14 +188,12 @@ def monitor_profit_loss():
                 reset_temp_params_in_yaml()
             else:
                 print_context("_trade: 平仓按钮点击返回False")
-                # 平仓点击失败：推送失败告警，不写成交记录、不设置冷却、不重置yaml
                 fail_msg = f"【平仓失败告警】品种：{ts_code_arg}，触发条件：{msg}"
                 send_msg(fail_msg)
 
         except Exception as e:
             send_msg(f"平仓异常错误：{str(e)}")
             print_context(f"平仓失败：{str(e)}")
-            # 平仓异常，回滚止盈止损阈值
             with shared_data.dict_rlock:
                 if original_pre_profit is not None:
                     shared_data.pre_profit = original_pre_profit
@@ -192,23 +204,26 @@ def monitor_profit_loss():
     flag_wait_market_print = True
     flag_no_position_print = True
 
+    # 初始定位盈亏控件，失败不崩，下一轮自愈
+    try:
+        shared_data.ths_common_control['盈亏'][0] = get_profit_loss_ctrl()
+        print_context("✅盈亏控件初始定位成功")
+    except Exception as e:
+        print_context(f"⚠️盈亏控件初始定位失败，等待自愈：{str(e)}")
+
     while True:
         try:
-            # 判断是否是在交易时段内，否则跳过循环，仅首次打印
             if not trade_flag():
                 if flag_wait_market_print:
                     print_context(
                         f"[{datetime.now().strftime('%H:%M:%S')}] 请等待期市开市！- 日市：9:00:00 | 夜市：21:00:00")
                     flag_wait_market_print = False
-                    # 切回未开市时，无持仓标记重置，防止下次开市上来就不打印
                     flag_no_position_print = True
                 sleep(1)
                 continue
 
-            # 已经开市，重置开市等待标记（离开未开市，下次再休市可以重新打印）
             flag_wait_market_print = True
 
-            # 判断是否存在持仓
             if not is_trade_status():
                 if flag_no_position_print:
                     print_context(f">>> [{datetime.now().strftime('%H:%M:%S')}] 无期货交易中，等待开仓！")
@@ -216,10 +231,8 @@ def monitor_profit_loss():
                 sleep(1)
                 continue
 
-            # 有持仓：重置无持仓标记，平仓回来可以再次打印
             flag_no_position_print = True
 
-            # 读取配置参数
             with shared_data.dict_rlock:
                 pre_profit = shared_data.pre_profit
                 original_pre_profit = pre_profit
@@ -232,7 +245,10 @@ def monitor_profit_loss():
                 with shared_data.ctrl_rlock:
                     profit_loss_ctrl = shared_data.ths_common_control['盈亏'][0]
                     profit_text = profit_loss_ctrl.window_text().strip()
-                    profit = float(profit_text.strip().split()[-1])
+                    parts = profit_text.split()
+                    if not parts:
+                        raise ValueError("持仓行文本为空")
+                    profit = float(parts[-1])
                     if "手多仓" in profit_text:
                         shared_data.direction = "rise"
                     elif "手空仓" in profit_text:
@@ -240,18 +256,28 @@ def monitor_profit_loss():
 
                 _hold_v = getattr(shared_data, "hold_value", None)
                 print(
-                    f"\r【监控信息[{datetime.now().strftime('%H:%M:%S')}]】 >>> 交易品种：{ts_code} {shared_data.tscode_lots_dict.get(ts_code)}手。 交易策略："
+                    f"\r【监控信息[{datetime.now().strftime('%H:%M:%S')}]】 >>> 交易时间：{shared_data.trade_menu_dict.get('trade_time','--')} 品种代码：{ts_code} "
+                    f"交易手数：{shared_data.tscode_lots_dict.get(ts_code)}手 策略编号："
                     f"{shared_data.trade_menu_dict.get('rule_id', 'unknow')} "
-                    f"多空：{shared_data.direction} 止盈阈值={pre_profit} 止损阈值={pre_loss} 云保本单（差值）={_hold_v} "
+                    f"多空：{shared_data.direction} 止盈阈值={pre_profit} 止损阈值={pre_loss} "
+                    f"云保本单（差值）={_hold_v} 止盈价：{shared_data.trade_menu_dict.get('profit_price','--')} 止损价：{shared_data.trade_menu_dict.get('loss_price','--')} "
                     f"浮动盈亏={profit:.2f}\033[K", flush=True, end="")
-            except (ValueError, Exception) as e:
-                # 修改文案：区分读取控件异常，不再误导平仓完成
+
+            except Exception as e:
+                # 关键：自愈调用必须加保护，否则 get_profit_loss_ctrl() 抛异常会直接炸到顶层
                 print(
-                    f"\r读取盈亏控件异常，等待重试 - [{datetime.now().strftime('%H:%M:%S')} VS {shared_data.valid_time}] \033[K",
+                    f"\r读取盈亏控件异常({str(e)})，尝试自愈重定位 - [{datetime.now().strftime('%H:%M:%S')}] \033[K",
                     flush=True, end="")
+                try:
+                    with shared_data.ctrl_rlock:
+                        new_ctrl = get_profit_loss_ctrl()
+                        shared_data.ths_common_control['盈亏'][0] = new_ctrl
+                    print(f"\r✅自愈成功，新控件文本：{new_ctrl.window_text().strip()}\033[K", flush=True, end="")
+                except Exception as re_err:
+                    print(f"\r❌自愈失败：{str(re_err)}\033[K", flush=True, end="")
+                sleep(0.5)
                 continue
 
-            # ========== 止盈止损判断（增加手数放大，pre_profit/pre_loss保留单手原值） ==========
             strategy_id = shared_data.trade_menu_dict.get("rule_id", "unknow")
             trade_period = shared_data.trade_menu_dict.get("trade_period", "")
             lots = shared_data.tscode_lots_dict.get(ts_code, 1)
@@ -260,34 +286,27 @@ def monitor_profit_loss():
 
             if pre_profit > 0 and profit >= total_pre_profit - 0.02:
                 close_reason = f"[{ts_code}]止盈平仓，单手目标{pre_profit:.2f}，{lots}手合计目标{total_pre_profit:.2f}\n当前浮动盈利：{profit:.2f}元(固定金额止盈)"
-                with shared_data.dict_rlock:
-                    shared_data.pre_profit = 0
-                    shared_data.pre_loss = 0
                 _trade(msg=close_reason, ts_code_arg=ts_code, profit_arg=profit,
-                       original_pre_profit=original_pre_profit, original_pre_loss=original_pre_loss,
-                       strategy_id=strategy_id, trade_period=trade_period)
+                      original_pre_profit=original_pre_profit, original_pre_loss=original_pre_loss,
+                      strategy_id=strategy_id, trade_period=trade_period)
                 print("量化程序已触发止盈平仓！")
 
             elif pre_loss < 0 and profit <= total_pre_loss + 0.02:
                 close_reason = f"[{ts_code}]止损平仓，单手目标{pre_loss:.2f}，{lots}手合计目标{total_pre_loss:.2f}\n当前浮动亏损：{profit:.2f}元(固定金额止损)"
-                with shared_data.dict_rlock:
-                    shared_data.pre_profit = 0
-                    shared_data.pre_loss = 0
                 _trade(msg=close_reason, ts_code_arg=ts_code, profit_arg=profit,
-                       original_pre_profit=original_pre_profit, original_pre_loss=original_pre_loss,
-                       strategy_id=strategy_id, trade_period=trade_period)
+                      original_pre_profit=original_pre_profit, original_pre_loss=original_pre_loss,
+                      strategy_id=strategy_id, trade_period=trade_period)
                 print("量化程序已触发止损平仓！")
-
-                # set_lots()
 
             sleep(MONITOR_INTERVAL)
         except Exception as e:
-            # 顶层兜底捕获，防止监控线程直接挂掉
             print_context(f"【monitor顶层捕获】监控循环异常：{str(e)}")
             send_msg(f"盈亏监控线程异常告警：{str(e)}")
             sleep(1)
             continue
 
 
+
 if __name__ == '__main__':
-    print(get_today_trade_stat())
+    # print(get_today_trade_stat())
+    print(get_profit_loss_ctrl().window_text().strip())

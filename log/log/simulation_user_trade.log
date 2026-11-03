@@ -51055,3 +51055,41 @@ TypeError: 'NoneType' object is not subscriptable
 2026-11-02 15:21:54 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
 2026-11-02 21:36:54 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
 2026-11-02 22:10:10 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-02 22:50:28 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-02 23:14:45 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-02 23:18:16 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-03 08:35:05 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-03 08:35:36 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-03 08:36:00 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-03 10:15:52 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-03 10:32:19 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-03 14:28:21 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-03 14:28:44 - simulation_user - CRITICAL - main.py[33] global_exception_handler - trace_id=- - 【全局未捕获异常】程序崩溃
+Traceback (most recent call last):
+  File "E:\auto_futures\main.py", line 600, in <module>
+    main()
+  File "E:\auto_futures\main.py", line 547, in main
+    init_shared_data(user_type=0,
+  File "E:\auto_futures\main.py", line 515, in init_shared_data
+    check_ths_status()  # 检查同花顺期货通启动状态
+  File "E:\auto_futures\core\connect_ths.py", line 296, in check_ths_status
+    local_control()
+  File "E:\auto_futures\core\connect_ths.py", line 439, in local_control
+    window = UIAWrapper(shared_data.trade_window.element_info)
+AttributeError: 'NoneType' object has no attribute 'element_info'
+2026-11-03 14:31:31 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-03 14:31:55 - simulation_user - CRITICAL - main.py[33] global_exception_handler - trace_id=- - 【全局未捕获异常】程序崩溃
+Traceback (most recent call last):
+  File "E:\auto_futures\main.py", line 600, in <module>
+    main()
+  File "E:\auto_futures\main.py", line 547, in main
+    init_shared_data(user_type=0,
+  File "E:\auto_futures\main.py", line 515, in init_shared_data
+    check_ths_status()  # 检查同花顺期货通启动状态
+  File "E:\auto_futures\core\connect_ths.py", line 296, in check_ths_status
+    local_control()
+  File "E:\auto_futures\core\connect_ths.py", line 439, in local_control
+    window = UIAWrapper(shared_data.trade_window.element_info)
+AttributeError: 'NoneType' object has no attribute 'element_info'
+2026-11-03 14:32:37 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-03 14:36:35 - simulation_user - INFO - main.py[498] init_shared_data - trace_id=INT - 开始初始化交易程序

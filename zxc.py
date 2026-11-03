@@ -1,310 +1,331 @@
-import random
-import requests
-import json
-import os
-from datetime import datetime, timedelta
 from time import sleep
-from public.jiaoyisuo import futures_info
-from public.agent import get_headers
-from public import shared_data, print_context
-from public.shared_data import get_data_cache_dir
-import ctypes
-from ctypes import wintypes
-from http.client import RemoteDisconnected   # ✅ 修正导入位置
-from tools.play_warn_sound import (play_warn_sound, play_warn_sound_win, play_warn_sound_tts)
-from tools.play_alert import sound_warn
-# 调用系统 MessageBox 弹窗（无第三方库，纯系统自带，任意线程安全）
-def message_box(text, title="提示", buttons=0, icon=64):
-    user32 = ctypes.WinDLL('user32', use_last_error=True)
-    user32.MessageBoxW.argtypes = (wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.UINT)
-    return user32.MessageBoxW(None, text, title, buttons | icon)
-
-MB_OKCANCEL = 1
-MB_ICONEXCLAMATION = 48
-IDOK = 1
-IDCANCEL = 2
+from datetime import datetime, timedelta
+from pywinauto import mouse, ElementNotFoundError
+from backtrader import strategy
+import time
+from public import shared_data
+from public.anti_screensaver import kill_blacklist_process
+from public.print_context import print_context
+from sendmsg.pushplus import send_msg
+from public.shared_data import click_position, is_trade_status, trade_flag, get_data_cache_dir, click_control, set_lots
+from log.trade_log import setup_trade_loggers
+import os, json
+# 导入计数写入函数
+from core.private import append_close_record
+from core.connect_ths import set_loss_profit
+from public.jiaoyisuo import get_future_info
 
 
-def is_in_restrict_time() -> bool:
-    """判断当前时间是否在 02:00 - 09:00 之间"""
-    now = datetime.now().hour
-    return 1 < now < 9
+logger = setup_trade_loggers()
+#
+UI_DELAY_SHORT = 0.2
+MONITOR_INTERVAL = 0.5
+# NO_HOLD_PRINT_INTERVAL = 6000  # 无持仓每60秒打印一次，不刷屏
+TRADE_INTERVAL = shared_data.valid_trade_interval if shared_data.valid_trade_interval else 300
 
 
-def get_trade_day_str() -> tuple[bool, str, str]:
-    """
-    判断当前是否夜盘跨日；返回 (is_night_session, sys_date_str, trade_date_str)
-    is_night_session: True=当前是夜盘，行情归属下一个交易日
-    sys_date_str: 本机系统当前 YYYYMMDD
-    trade_date_str: 该段行情真实归属交易日 YYYYMMDD
-    规则：21:00 ~ 23:59:59 属于次日交易日；00:00~02:00也属于前一晚的次日交易日
-    """
-    now = datetime.now()
-    sys_date_str = now.strftime("%Y%m%d")
-    hour = now.hour
-    # 21点之后：夜盘，交易日=明天
-    if 21 <= hour <= 23:
-        trade_dt = now + timedelta(days=1)
-        return True, sys_date_str, trade_dt.strftime("%Y%m%d")
-    # 0点~2点：还是夜盘，归属前一晚的次日
-    elif 0 <= hour < 2:
-        trade_dt = now + timedelta(days=1)
-        return True, sys_date_str, trade_dt.strftime("%Y%m%d")
+# 新增：读取trade_log.json获取今日交易次数、累计盈亏
+def get_today_trade_stat():
+    log_path = os.path.join(get_data_cache_dir(), "trade_log","trade_log.json")
+    today_str = datetime.now().strftime("%Y%m%d")
+    real_count = 0
+    real_pnl = 0.0
+    sim_count = 0
+    sim_pnl = 0.0
+    # print_context(f"【DEBUG】日志完整路径：{log_path}")
+    # print_context(f"【DEBUG】今日日期字符串：{today_str}")
+    if os.path.exists(log_path):
+        # print_context("【DEBUG】文件存在，开始读取")
+        try:
+            with open(log_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            records = data.get("records", {})
+            # print_context(f"【DEBUG】读取到总记录条数：{len(records)}")
+            for time_key, rec in records.items():
+                rec_date = time_key[:8]
+                if rec_date == today_str:
+                    pnl_val = float(rec.get("pnl", 0.0))
+                    ut = int(rec.get("user_type", 0))
+                    if ut == 0:
+                        sim_count += 1
+                        sim_pnl += pnl_val
+                    elif ut == 1:
+                        real_count += 1
+                        real_pnl += pnl_val
+            #         print_context(f"【DEBUG】匹配今日记录：{time_key}, user_type={ut}, pnl={pnl_val}")
+            # print_context(f"【DEBUG】实盘：count={real_count}, pnl={real_pnl:.2f} | 模拟：count={sim_count}, pnl={sim_pnl:.2f}")
+        except Exception as e:
+            print_context(f"读取交易日志统计失败:{str(e)}")
     else:
-        # 日盘，交易日=本机今天
-        return False, sys_date_str, sys_date_str
+        print_context(f"【DEBUG】文件不存在！")
+    return {"sim_user": [sim_count, sim_pnl], "real_user": [real_count, real_pnl]}
 
 
-def get_open_price(ts_code=None, url="https://push2.eastmoney.com/api/qt/ulist.np/get"):
-    # ==========【单品种入口】ts_code=None 时，直接用当前交易品种，不再遍历 quote_list ==========
-    if ts_code is None:
-        current_ts = shared_data.ts_code.strip() or shared_data.default_tscode
-        play_warn_sound(f"程序将获取:[{current_ts}]开盘价信息!")
-        if not current_ts:
-            raise Exception("shared_data.ts_code 为空，无法获取开盘价")
-        print_context.print_context(f"[INFO] 仅拉取当前交易品种[{current_ts}]，不遍历列表，避免频繁请求被风控")
-        return get_open_price(ts_code=current_ts, url=url)
+def auto_trade(trade_dir=None):
+    """负责点击买多或卖空进行期货品种下单，等待成交确认"""
+    if trade_dir is None:
+        print_context("没有明确的交易方向！")
+        return None
+    shared_data.trade_window.maximize()
+    shared_data.trade_window.set_focus()
+    controls = shared_data.ths_common_control
+    sleep(0.5)
+    current_time = datetime.now()
+    click_ok = False
+    # 买多 / 卖空
+    if trade_dir == "rise":
+        try:
+            click_position(controls["买多"][1])
+            click_ok = True
+        except Exception as e:
+            print_context(f"买多坐标点击失败，尝试文本查找方式：{str(e)}")
+        if not click_ok:
+            click_control(text="买多", control_type="Text", click_btn=0)
+    else:
+        try:
+            click_position(controls["卖空"][1])
+            click_ok = True
+        except Exception as e:
+            print_context(f"卖空坐标点击失败，尝试文本查找方式：{str(e)}")
+        if not click_ok:
+            click_control(text="卖空", control_type="Text", click_btn=0)
+    cur_price = float(controls["即时价格"][0].window_text().strip())
+    print_context(f"[{current_time.strftime('%H:%M:%S')}]程序已发送交易请求，正在等待市场撮合中......")
 
-    # ===================== 下面全部是【单品种】逻辑 =====================
-    target_code = ts_code.lower()
-
-    EXCHANGE_CODE = {
-        "上期所": 113,
-        "大商所": 114,
-        "郑商所": 115,
-        "能源中心": 142,
-        "中金所": 220
-    }
-
-    is_night_session, sys_today_str, real_trade_day_str = get_trade_day_str()
-    cache_folder = get_data_cache_dir()
-    cache_folder = os.path.join(cache_folder, "open_price")
-    os.makedirs(cache_folder, exist_ok=True)
-
-    # ---------- 休市时段阻塞等待（02:00~09:00）----------
-    while True:
-        cur_time = datetime.now().strftime("%H:%M:%S")
-        if is_in_restrict_time():
-            print(f"\r[WARN - get_open_price] [{cur_time}] - [日市开盘： 上午9:00  夜市开盘： 21:00]，休市等待中...", end="", flush=True)
-            sleep(1)
-        else:
-            # print("\n[INFO] 退出休市等待，时间满足，可以开始拉取数据")
+    # ========== 等待成交确认（只检测，不设置云单） ==========
+    max_wait_sec = 30
+    poll_interval = 0.5
+    start_ts = time.time()
+    filled = False
+    while time.time() - start_ts < max_wait_sec:
+        sleep(poll_interval)
+        status_ok = is_trade_status()
+        if status_ok:
+            filled = True
             break
 
-    # ---------- 清理过期缓存（只删超过1天的旧文件）----------
-    print_context.print_context("[INFO] 开始清理过期缓存文件")
-    one_days_ago_str = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
-    del_count = 0
-    for filename in os.listdir(cache_folder):
-        file_path = os.path.join(cache_folder, filename)
-        if os.path.isfile(file_path) and filename.endswith("_openprice.json"):
-            try:
-                file_date = filename.split("_")[-2]
-                if file_date < one_days_ago_str:
-                    os.remove(file_path)
-                    del_count += 1
-            except Exception as e:
-                print_context.print_context(f"[WARN] 删除缓存失败 {filename}, err:{str(e)}")
-    print_context.print_context(f"[INFO] 缓存清理完成，本次清理过期文件数量：{del_count}")
-
-    now_hour = datetime.now().hour
-    force_network = False
-    trade_cache_file = os.path.join(cache_folder, f"{target_code}_{real_trade_day_str}_openprice.json")
-    if 21 <= now_hour <= 23:
-        if os.path.exists(trade_cache_file):
-            print_context.print_context(f"[INFO] 🌙21‑23点：检测到已存在交易日缓存 {trade_cache_file}，跳过删除与网络请求")
-        else:
-            day_cache_file = os.path.join(cache_folder, f"{target_code}_{sys_today_str}_openprice.json")
-            if os.path.exists(day_cache_file):
-                try:
-                    os.remove(day_cache_file)
-                    print_context.print_context(f"[INFO] 🌙21‑23点时段：删除白天开盘缓存 {day_cache_file}")
-                except Exception as e:
-                    print_context.print_context(f"[WARN] 删除白天缓存失败 {day_cache_file}, err:{str(e)}")
-            force_network = True
-            print_context.print_context(f"[INFO] 🌙21‑23点：force_network 置为True，需要网络拉取数据")
-
-    result_data = {}
-    found_local_file = False
-
-    if not force_network:
-        check_dates = [real_trade_day_str, sys_today_str]
-        for check_date in check_dates:
-            for filename in os.listdir(cache_folder):
-                if filename.startswith(f"{target_code}_") and filename.endswith("_openprice.json"):
-                    try:
-                        file_date = filename.split("_")[-2]
-                        if file_date != check_date:
-                            continue
-                        file_path = os.path.join(cache_folder, filename)
-                        with open(file_path, "r", encoding="utf-8") as fp:
-                            data = json.load(fp)
-                        result_data[target_code] = data
-                        found_local_file = True
-                        break
-                    except Exception as e:
-                        print_context.print_context(f"[WARN] 读取缓存文件异常 {filename}, err:{str(e)}")
-                        continue
-            if found_local_file:
-                break
+    if filled:
+        print_context(f"✅[{datetime.now().strftime('%H:%M:%S')}]开仓成交确认，持仓已出现!")
+        print_context(f"今日交易明细 - {get_today_trade_stat()}")
+        with shared_data.variables_rlock:
+            shared_data.valid_time = None
+        # ===== 关键：注释掉这里提前调用set_loss_profit() =====
+        # 原因：此时order线程还在auto_trade内部，loss_profit_param还没写入有效值，
+        # 提前调用会导致todo_list为空，白跑一趟。云单设置统一交给order线程末尾执行。
+        # set_loss_profit()
     else:
-        print_context.print_context(f"[INFO] force_network=True，跳过缓存读取，直接走网络请求")
+        print_context(f"❌[{datetime.now().strftime('%H:%M:%S')}]开仓等待{max_wait_sec}秒未检测到持仓，请检查委托是否成交")
+    return cur_price
 
-    if found_local_file:
-        if is_night_session:
-            if not os.path.exists(trade_cache_file):
-                print_context.print_context(f"[INFO] 夜盘：需要复制缓存生成交易日缓存文件")
-                data_item = result_data[target_code]
-                try:
-                    with open(trade_cache_file, "w", encoding="utf-8") as fp:
-                        json.dump(data_item, fp, ensure_ascii=False, indent=4)
-                except Exception as e:
-                    print_context.print_context(f"[ERROR] 写入交易日缓存失败 {trade_cache_file}, err:{repr(e)}")
-        shared_data.open_price = result_data
-        return result_data
 
-    print_context.print_context(f"[INFO] 缓存未命中，准备发起网络请求拉取【{target_code}】")
+def monitor_profit_loss():
+    from core.trade import reset_temp_params_in_yaml
+    # ========== 启动监控时一次性读取平仓控件坐标 ==========
     try:
-        code_lower = target_code.lower()
-        prefix = code_lower[:-4]
-        exchange = futures_info[prefix]["exchange"]
-        print_context.print_context(f"[INFO] 品种解析：prefix={prefix}, exchange={exchange}")
-
-        req_code = code_lower[:-4].upper() + code_lower[-3:] if exchange == "郑商所" else code_lower
-        print_context.print_context(f"[INFO] 组装secid请求代码: {req_code}")
-
-        # ========== 网络重试，处理 RemoteDisconnected 断连；每次新建session，不复用keep-alive ==========
-        retry_times = 3
-        resp = None
-        for r in range(retry_times):
-            try:
-                sleep_sec = random.uniform(2, 4)
-                print_context.print_context(f"[INFO] 网络请求前置休眠 {sleep_sec:.2f}s 防风控，第{r+1}/{retry_times}次尝试")
-                sleep(sleep_sec)
-                session = requests.Session()
-                resp = session.get(
-                    url=url,
-                    params={
-                        "fltt": 2, "invt": 2,
-                        "secids": f"{EXCHANGE_CODE[exchange]}.{req_code}",
-                        "fields": "f12,f28,f17,f18,f3,f4"
-                    },
-                    headers=get_headers() | {"Accept": "*/*", "Connection": "close"},
-                    timeout=12
-                )
-                session.close()
-                break
-            except (RemoteDisconnected, requests.exceptions.ConnectionError) as e:
-                print_context.print_context(f"[WARN] 【{target_code}】连接被远端关闭，重试 {r+1}/{retry_times}, err:{str(e)}")
-                sleep(random.uniform(1.5, 3.0))
-                continue
-        if resp is None:
-            raise Exception("多次请求均被远端断开，获取失败")
-
-        print_context.print_context(f"[INFO] http请求返回状态码: {resp.status_code}")
-        item = resp.json()["data"]["diff"][0]
-
-        data_item = {
-            "日期": datetime.now().strftime("%Y%m%d %H:%M:%S"),
-            "ts_code": target_code,
-            "交易所": exchange,
-            "今日开盘价": item.get("f17", 0.0),
-            "昨日结算价": item.get("f28", 0.0),
-            "昨日收盘价": item.get("f18", 0.0),
-        }
-        result_data[target_code] = data_item
-        open_price = data_item.get("今日开盘价", 0.0)
-        print_context.print_context(f"[INFO] 解析行情：open={open_price}, settle={data_item['昨日结算价']}, close={data_item['昨日收盘价']}")
-        if open_price == 0.0 or open_price is None:
-            print_context.print_context(f"[WARN] 【{target_code}】今日开盘价为0，弹出确认弹窗")
-            play_warn_sound(f"从网络获取{target_code}的开盘信息失败，请立即手动输入！")
-            choice = message_box(
-                f"未获取到 {target_code} 的有效开盘价！\n\n按[确定]键手动输入，按[取消]键将退出程序！",
-                title="❌警告          ",
-                buttons=MB_OKCANCEL,
-                icon=MB_ICONEXCLAMATION
-            )
-            if choice == IDOK:
-                raise Exception("开盘价为0，进入手动输入模式")
-            else:
-                print_context.print_context(f"[ERROR] 用户选择取消，程序终止")
-                exit()
-
-        sys_file = os.path.join(cache_folder, f"{target_code}_{sys_today_str}_openprice.json")
-        try:
-            with open(sys_file, "w", encoding="utf-8") as fp:
-                json.dump(data_item, fp, ensure_ascii=False, indent=4)
-            print_context.print_context(f"[INFO] 写入系统日期缓存文件：{os.path.abspath(sys_file)}")
-        except Exception as e:
-            print_context.print_context(f"[ERROR] 写入文件失败 {sys_file}, err:{repr(e)}")
-
-        if is_night_session:
-            try:
-                with open(trade_cache_file, "w", encoding="utf-8") as fp:
-                    json.dump(data_item, fp, ensure_ascii=False, indent=4)
-                print_context.print_context(f"[INFO] 🌙夜盘模式，额外写入交易日缓存：{os.path.abspath(trade_cache_file)}")
-            except Exception as e:
-                print_context.print_context(f"[ERROR] 写入交易日缓存失败 {trade_cache_file}, err:{repr(e)}")
-
-        print(f"✅ 已从网络[{url}]成功获取并保存 <{target_code}> 期货品种的今日开盘价等相关数据>>>\n{data_item}")
+        close_ctrl_position = shared_data.ths_common_control['平仓'][1]
     except Exception as e:
-        print_context.print_context(f"[ERROR] 【{target_code}】网络拉取异常: {str(e)}")
-        print(f"❌ {target_code}今日开盘信息： 获取失败：\n{str(e)}\n网络来源——{url}\n{'>>'*20} 请手动输入开盘价 {'<<'*20}")
+        print_context(f"monitor_profit_loss 获取平仓控件失败:{str(e)}")
+        return
 
-        choice = message_box(
-            f"【{target_code}】行情拉取失败！\n需要你在控制台输入开盘、结算、收盘价格。\n确认后看控制台输入，取消则退出程序",
-            title="行情获取失败",
-            buttons=MB_OKCANCEL,
-            icon=MB_ICONEXCLAMATION
-        )
-        if choice != IDOK:
-            print_context.print_context(f"[INFO] 用户取消手动输入，退出程序")
-            exit()
-
-        def input_float(prompt):
-            while True:
-                s = input(prompt).strip()
-                try:
-                    return float(s)
-                except ValueError:
-                    print("输入非法，请输入数字！")
-
-        open_price_input = input_float(f"请输入[{target_code}]开盘价: ")
-        pre_settle_input = input_float(f"请输入[{target_code}]前日结算价 >>>")
-        pre_close_input = input_float(f"请输入[{target_code}]前日收盘价 >>>")
-
-        data_item = {
-            "日期": datetime.now().strftime("%Y%m%d %H:%M:%S"),
-            "ts_code": target_code,
-            "今日开盘价": float(open_price_input),
-            "昨日结算价": float(pre_settle_input),
-            "昨日收盘价": float(pre_close_input),
-        }
-        result_data[target_code] = data_item
-        print_context.print_context(f"[INFO] 手动输入完成，数据已录入")
-
-        sys_file = os.path.join(cache_folder, f"{target_code}_{sys_today_str}_openprice.json")
+    # ============== 自动平仓执行函数，签名不变 ==============
+    def _trade(msg, ts_code_arg: str, profit_arg: float,
+               strategy_id: str, trade_period: str,
+               original_pre_profit=None, original_pre_loss=None,
+               ):
         try:
-            with open(sys_file, "w", encoding="utf-8") as fp:
-                json.dump(data_item, fp, ensure_ascii=False, indent=4)
-            print_context.print_context(f"[INFO] 写入系统日期缓存文件：{os.path.abspath(sys_file)}")
+            with shared_data.ctrl_rlock:
+                shared_data.trade_window.maximize()
+                shared_data.trade_window.set_focus()
+                sleep(0.5)
+                result = click_position(close_ctrl_position)
+            # 取本次平仓对应的手数
+            lots = shared_data.tscode_lots_dict.get(ts_code_arg, 1)
+            # 读取品种费率，计算双边手续费（和order里口径保持一致）
+            fut_info = get_future_info(ts_code_arg, 0)
+            per_lot_two_way_fee = fut_info.get('fee', 0) * 2
+            total_fee = per_lot_two_way_fee * lots
+            net_profit = profit_arg - total_fee  # 纯利润 = 界面毛盈亏 - 双边手续费
+
+            if result:
+                print_context("_trade: 程序已根据止损止盈设置值完成自动平仓！")
+                with shared_data.variables_rlock:
+                    shared_data.valid_time = datetime.now() + timedelta(minutes=shared_data.valid_trade_interval)
+                    print_context(f"【平仓点击成功，设置冷却】下次交易有效时间起点：{shared_data.valid_time}")
+
+                # 仅平仓点击成功才写入记录、统计、推送成功消息、重置参数
+                ut = getattr(shared_data, "user_type", 0)
+                append_close_record(user_type=ut, pnl=profit_arg, ts_code=ts_code_arg,
+                                    strategy_id=strategy_id, trade_period=trade_period)
+                stat = get_today_trade_stat()
+                sim_cnt, sim_pnl = stat["sim_user"]
+                real_cnt, real_pnl = stat["real_user"]
+                full_msg = (
+                    f"{msg}\n"
+                    f"本次平仓手数：{lots}手\n"
+                    f"市值盈亏（涨跌差价）：{profit_arg:.2f}元\n"
+                    f"本次双边手续费：{total_fee:.2f}元\n"
+                    f"✅纯利润：{net_profit:.2f}元\n"
+                    f"------------ 今日平仓汇总 ------------\n"
+                    f"【模拟账户】平仓次数：{sim_cnt}，累计毛盈亏：{sim_pnl:.2f}元\n"
+                    f"【实盘账户】平仓次数：{real_cnt}，累计毛盈亏：{real_pnl:.2f}元"
+                )
+                send_msg(f"自动平仓成功 - 品种：{ts_code_arg}\n{full_msg}")
+                print_context(f"自动平仓 [{datetime.now().strftime('%H:%M:%S')}]")
+                reset_temp_params_in_yaml()
+            else:
+                print_context("_trade: 平仓按钮点击返回False")
+                # 平仓点击失败：推送失败告警，不写成交记录、不设置冷却、不重置yaml
+                fail_msg = f"【平仓失败告警】品种：{ts_code_arg}，触发条件：{msg}"
+                send_msg(fail_msg)
+
         except Exception as e:
-            print_context.print_context(f"[ERROR] 写入文件失败 {sys_file}, err:{repr(e)}")
+            send_msg(f"平仓异常错误：{str(e)}")
+            print_context(f"平仓失败：{str(e)}")
+            # 平仓异常，回滚止盈止损阈值
+            with shared_data.dict_rlock:
+                if original_pre_profit is not None:
+                    shared_data.pre_profit = original_pre_profit
+                if original_pre_loss is not None:
+                    shared_data.pre_loss = original_pre_loss
 
-        if is_night_session:
+    print_context("MonitorThread 盈亏监控线程已启动，永久常驻运行")
+    flag_wait_market_print = True
+    flag_no_position_print = True
+
+    while True:
+        try:
+            # 判断是否是在交易时段内，否则跳过循环，仅首次打印
+            if not trade_flag():
+                if flag_wait_market_print:
+                    print_context(
+                        f"[{datetime.now().strftime('%H:%M:%S')}] 请等待期市开市！- 日市：9:00:00 | 夜市：21:00:00")
+                    flag_wait_market_print = False
+                    # 切回未开市时，无持仓标记重置，防止下次开市上来就不打印
+                    flag_no_position_print = True
+                sleep(1)
+                continue
+
+            # 已经开市，重置开市等待标记（离开未开市，下次再休市可以重新打印）
+            flag_wait_market_print = True
+
+            # 判断是否存在持仓
+            if not is_trade_status():
+                if flag_no_position_print:
+                    print_context(f">>> [{datetime.now().strftime('%H:%M:%S')}] 无期货交易中，等待开仓！")
+                    flag_no_position_print = False
+                sleep(1)
+                continue
+
+            # 有持仓：重置无持仓标记，平仓回来可以再次打印
+            flag_no_position_print = True
+
+            # 读取配置参数
+            with shared_data.dict_rlock:
+                pre_profit = shared_data.pre_profit
+                original_pre_profit = pre_profit
+                pre_loss = shared_data.pre_loss
+                original_pre_loss = pre_loss
+                ts_code = shared_data.trade_menu_dict.get("ts_code", shared_data.ts_code)
+
+            profit = 0.0
+            direction_from_text = None
             try:
-                with open(trade_cache_file, "w", encoding="utf-8") as fp:
-                    json.dump(data_item, fp, ensure_ascii=False, indent=4)
-                print_context.print_context(f"[INFO] 🌙夜盘模式，手动输入，额外写入交易日缓存：{os.path.abspath(trade_cache_file)}")
+                with shared_data.ctrl_rlock:
+                    profit_loss_ctrl = shared_data.ths_common_control['盈亏'][0]
+                    # 先判断控件可见，规避重绘瞬间控件隐形
+                    if not profit_loss_ctrl.is_visible():
+                        raise ElementNotFoundError("盈亏控件当前不可见")
+                    profit_text = profit_loss_ctrl.window_text().strip()
+                if not profit_text:
+                    raise ValueError("盈亏文本为空")
+
+                # 解析浮动盈亏数值，兼容多种同花顺格式：+123.45 / -45.6 / --
+                parts = profit_text.split()
+                num_str = None
+                for p in reversed(parts):
+                    if p in ("--", "—", "***"):
+                        num_str = None
+                        break
+                    try:
+                        float(p)
+                        num_str = p
+                        break
+                    except ValueError:
+                        continue
+                if num_str is None:
+                    raise ValueError(f"盈亏文本无有效数字: {profit_text}")
+                profit = float(num_str)
+
+                # 识别多空，只在文本包含标记时更新
+                if "手多仓" in profit_text:
+                    direction_from_text = "rise"
+                elif "手空仓" in profit_text:
+                    direction_from_text = "fall"
+                if direction_from_text is not None:
+                    shared_data.direction = direction_from_text
+
+                _hold_v = getattr(shared_data, "hold_value", None)
+                ts_code = shared_data.trade_menu_dict.get("ts_code", shared_data.ts_code)
+
+                print(
+                    f"\r【监控信息[{datetime.now().strftime('%H:%M:%S')}]】 >>> 交易时间：{shared_data.trade_menu_dict['trade_time']} 品种代码：{ts_code} "
+                    f"交易手数：{shared_data.tscode_lots_dict.get(ts_code)}手 策略编号："
+                    f"{shared_data.trade_menu_dict.get('rule_id', 'unknow')} "
+                    f"多空：{shared_data.direction} 止盈阈值={pre_profit} 止损阈值={pre_loss} "
+                    f"云保本单（差值）={_hold_v} 止盈价：{shared_data.trade_menu_dict.get('profit_price')} 止损价：{shared_data.trade_menu_dict['loss_price']}"
+                    f"浮动盈亏={profit:.2f}\033[K", flush=True, end="")
+            except ElementNotFoundError:
+                print(
+                    f"\r读取盈亏控件异常（控件不可见），等待重试 - [{datetime.now().strftime('%H:%M:%S')}] \033[K",
+                    flush=True, end="")
+                continue
+            except ValueError as ve:
+                print(
+                    f"\r读取盈亏控件异常（文本解析失败:{str(ve)}），等待重试 - [{datetime.now().strftime('%H:%M:%S')}] \033[K",
+                    flush=True, end="")
+                continue
             except Exception as e:
-                print_context.print_context(f"[ERROR] 写入交易日缓存失败 {trade_cache_file}, err:{repr(e)}")
+                print(
+                    f"\r读取盈亏控件异常，等待重试 - [{datetime.now().strftime('%H:%M:%S')}] \033[K",
+                    flush=True, end="")
+                continue
 
-    shared_data.open_price = result_data
-    print_context.print_context(f"[INFO] 【{target_code}】单品种处理流程全部结束，返回结果")
-    return result_data
+            # ========== 止盈止损判断（增加手数放大，pre_profit/pre_loss保留单手原值） ==========
+            strategy_id = shared_data.trade_menu_dict.get("rule_id", "unknow")
+            trade_period = shared_data.trade_menu_dict.get("trade_period", "")
+            lots = shared_data.tscode_lots_dict.get(ts_code, 1)
+            total_pre_profit = pre_profit * lots
+            total_pre_loss = pre_loss * lots
 
+            if pre_profit > 0 and profit >= total_pre_profit - 0.02:
+                close_reason = f"[{ts_code}]止盈平仓，单手目标{pre_profit:.2f}，{lots}手合计目标{total_pre_profit:.2f}\n当前浮动盈利：{profit:.2f}元(固定金额止盈)"
+                with shared_data.dict_rlock:
+                    shared_data.pre_profit = 0
+                    shared_data.pre_loss = 0
+                _trade(msg=close_reason, ts_code_arg=ts_code, profit_arg=profit,
+                       original_pre_profit=original_pre_profit, original_pre_loss=original_pre_loss,
+                       strategy_id=strategy_id, trade_period=trade_period)
+                print("量化程序已触发止盈平仓！")
+
+            elif pre_loss < 0 and profit <= total_pre_loss + 0.02:
+                close_reason = f"[{ts_code}]止损平仓，单手目标{pre_loss:.2f}，{lots}手合计目标{total_pre_loss:.2f}\n当前浮动亏损：{profit:.2f}元(固定金额止损)"
+                with shared_data.dict_rlock:
+                    shared_data.pre_profit = 0
+                    shared_data.pre_loss = 0
+                _trade(msg=close_reason, ts_code_arg=ts_code, profit_arg=profit,
+                       original_pre_profit=original_pre_profit, original_pre_loss=original_pre_loss,
+                       strategy_id=strategy_id, trade_period=trade_period)
+                print("量化程序已触发止损平仓！")
+
+
+            sleep(MONITOR_INTERVAL)
+        except Exception as e:
+            # 顶层兜底捕获，防止监控线程直接挂掉
+            print_context(f"【monitor顶层捕获】监控循环异常：{str(e)}")
+            send_msg(f"盈亏监控线程异常告警：{str(e)}")
+            sleep(1)
+            continue
 
 
 if __name__ == '__main__':
-    # print(get_open_price(ts_code="fg2611"))
-    print(get_open_price())
+    print(get_today_trade_stat())

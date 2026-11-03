@@ -13,8 +13,7 @@ from datetime import timedelta
 import logging
 import time
 import psutil
-from pywinauto import Application
-
+from pywinauto import Application, findwindows
 
 # 创建类型重入锁
 deque_lock = threading.Lock()
@@ -99,6 +98,25 @@ trade_time_table = [(9, 0, 10, 15), (10, 30, 11, 30), (13, 30, 15, 0), (21, 0, 2
 start_trade_date = None  # 期货开始交易时间（下单日期）
 
 # ===================== 核心函数 =====================
+def connect_ths():
+    """
+    在打开同花顺应用程序的前提下连接窗口以便操作其他控件
+    """
+    elem_list = findwindows.find_elements(title_re=r".*同花顺期货通.*", backend="uia")
+    # 过滤Chromium附属渲染窗口Chrome_WidgetWin_1
+    real_elems = [e for e in elem_list if e.class_name != "Chrome_WidgetWin_1"]
+    if len(real_elems) == 0:
+        raise RuntimeError("找不到同花顺主窗口，请确认软件已打开")
+    if len(real_elems) > 1:
+        raise RuntimeError("仍然存在多个主窗口，无法选择")
+    # 使用窗口句柄连接，不再使用title_re，消除二义性
+    main_handle = real_elems[0].handle
+    app = Application(backend="uia").connect(handle=main_handle, timeout=3)
+    ths_window = app.window(handle=main_handle)
+    # print(ths_window.window_text().strip())
+    return ths_window
+
+
 def get_direction():
     with variables_rlock:
         return direction_dict.get(ts_code, "sideways")
@@ -586,5 +604,5 @@ if __name__ == "__main__":
     # click_position(rect_tuple=(100,100,200,200))
     # print(is_trade_status())
     # click_control(text="锁仓", control_type="Text", click_btn=0)
-
+    connect_ths()
     pass
