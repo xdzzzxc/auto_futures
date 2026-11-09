@@ -21,6 +21,7 @@ variables_rlock = threading.RLock()
 ctrl_rlock = threading.RLock()
 db_rlock = threading.RLock()
 dict_rlock = threading.RLock()
+yaml_rlock = threading.Lock()
 cur_price_deque = deque(maxlen=200)  # 9:05和21:05以前用这里的数据
 user_type = 0  # 0-模拟用户  1-国泰君安期货用户
 user_name = {0: "模拟交易-1811889418", 1: "国泰君安_CTP85415809"}  # 模拟交易-1811889418 国泰君安_CTP85415809
@@ -61,7 +62,7 @@ condition_control = {}  # 条件单窗口控件映射字典
 logger: logging.Logger | None = None  # 根据用户选择的日志器
 quote_list = {"m2701", "c2701"}  # 默认要从东方财富网获取开盘价等信息的期货品种
 ts_code = ""  # 期货商品代码（如au2601)通过人工手动选择后作为本次交易主体品种
-default_tscode = "c2701"  # 当在无人进入期货交易时，自动选择该期货品种作为当日的交易品种
+default_tscode = "m2701"  # 当在无人进入期货交易时，自动选择该期货品种作为当日的交易品种
 # search_future_list = []  # 待搜索的期货商品代码列表
 open_price = {}  # 交易品种开盘价信息：trade.order()
 pre_profit = 80  # 手动设置固定止盈值
@@ -106,7 +107,7 @@ def connect_ths():
     # 过滤Chromium附属渲染窗口Chrome_WidgetWin_1
     real_elems = [e for e in elem_list if e.class_name != "Chrome_WidgetWin_1"]
     if len(real_elems) == 0:
-        raise RuntimeError("找不到同花顺主窗口，请确认软件已打开")
+        raise RuntimeError("找不到同花顺主窗口，请手动运行该应用程序并完成用户登录！")
     if len(real_elems) > 1:
         raise RuntimeError("仍然存在多个主窗口，无法选择")
     # 使用窗口句柄连接，不再使用title_re，消除二义性
@@ -474,9 +475,14 @@ def simulate_input(window, ctrl, value):
 def set_lots(window=None, fut_ctrl=None, fut_lots=1):
     # print_context(f"[调试1] set_lots被调用！当前品种ts_code={ts_code}")
     # print_context(f"[调试2] 手数字典当前全部内容={tscode_lots_dict}")
-
+    global ts_code
     window = trade_window
     fut_ctrl = ths_common_control["手数"][0]
+
+    
+    with variables_rlock:
+        ts_code = ths_common_control["期货代码"][0].window_text().strip()
+        # tscode_lots_dict[ts_code] = int(fut_ctrl.window_text())
     with dict_rlock:
         fut_lots = tscode_lots_dict.get(ts_code, default_lots_dict.get(ts_code[:-4], 1))
     print_context(f"set_lots被调用！当前品种ts_code:{ts_code} 本次计算出的目标手数={tscode_lots_dict}")

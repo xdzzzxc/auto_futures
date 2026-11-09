@@ -1,3 +1,4 @@
+import threading
 from time import sleep
 from core.monitor import monitor_profit_loss
 from public import shared_data
@@ -18,6 +19,7 @@ from data.db_price import flush_remain_buffer
 from public.anti_screensaver import main_daemon
 from public.shared_data import clean_old_trade_db, default_lots_dict
 from audio.play_alert import *
+from tools.fetch_future_trend import poll_stop_event, trend_poll_loop
 
 TIMEOUT_SEC = 6
 
@@ -559,34 +561,60 @@ def main():
     watchdog = threading.Thread(target=ths_pre_check_thread, name="WatchdogThread", daemon=True)
     # 统一全部start，消除时序分散问题
     price_thread.start()
+    print(">>> 【price_thread】成功启动 获取品种实时价格线程!")
     order_thread.start()
-    monitor_thread.start()
+    monitor_thread.start()  # 放在后面if判断分支
+    print(">>> 成功启动 自动交易监控线程！")
     reget_open_price_thread.start()
+    print(">>> 成功启动 获取品种开盘价信息线程！")
     anti_thread.start()
+    print(">>> 成功启动 防屏保、杀广告窗口线程！")
     watchdog.start()
-    print_context(f"✅ 所有量化交易线程启动成功 >>>\n"
-                  f"获取期货品种即时行情线程-collect_current_price(PriceThread)\n"
-                  f"订单线程-trade.order(OrderThread)\n"
-                  f"自动交易监控线程-monitor.monitor(MonitorThread)\n"
-                  f"开仓价重取线程-ReGetOpenPriceThread\n"
-                  f"守护任务线程-AntiThread")
+    print(">>> 成功开启 同花顺应用应用程序监控线程！")
+
+    # 检查启动同花顺后是否存在老仓，决定是否启动特殊监控程序：tools\monitor_manual_close.py
+
+    # try:
+    #     qy_val = float(shared_data.ths_common_control["权益"][0].window_text().strip().split(":")[-1])
+    #     zj_val = float(shared_data.ths_common_control["可用资金"][0].window_text().strip().split(":")[-1])
+    #     # close_text = shared_data.ths_common_control["平仓"][0].window_text().strip()
+    #     # print(f'平仓控件的文本显示：{close_text}')
+    #     if qy_val - zj_val > 1000:
+    #         from tools.monitor_manual_close import monitor_manual_close
+    #         manual_close_threading = threading.Thread(target=monitor_manual_close, name="Manual_close", daemon=True)
+    #         manual_close_threading.start()
+    #         print(">>> 成功启动 老仓交易监控程序！")
+    #     else:
+    #         print(">>> 程序没有检查到老仓的存在，正常启用 自动平仓监控线程！")
+    #         monitor_thread = threading.Thread(target=monitor_profit_loss, name="MonitorThread", daemon=True)
+    #         monitor_thread.start()
+    # except Exception as e:
+    #     print(f"{e}")
+
 
     # ===== 新增：开盘价获取放到独立子线程，休市等待不再阻塞主线程 =====
     open_price_thread = threading.Thread(target=get_open_price, name="OpenPriceThread", daemon=True)
     open_price_thread.start()
     print_context("✅ 开盘价获取线程 OpenPriceThread 已启动（休市等待在子线程执行，不阻塞主线程）")
 
+    # 开启捕获即时行情子线程
+    trend_poll_loop_thread = threading.Thread(
+        target=trend_poll_loop,
+        name="TrendPollLoopThread",
+        daemon=True
+    )
+    trend_poll_loop_thread.start()
     # 把线程放到列表里方便后续模块调用查看线程的存活状态
-    shared_data.thread_list = []
-    shared_data.thread_list.extend([
-        price_thread,
-        order_thread,
-        monitor_thread,
-        reget_open_price_thread,
-        anti_thread,
-        watchdog,
-        open_price_thread
-    ])
+    # shared_data.thread_list = []
+    # shared_data.thread_list.extend([
+    #     price_thread,
+    #     order_thread,
+    #     monitor_thread,
+    #     reget_open_price_thread,
+    #     anti_thread,
+    #     watchdog,
+    #     open_price_thread
+    # ])
 
     try:
         while True:

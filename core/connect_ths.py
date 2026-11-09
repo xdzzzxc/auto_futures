@@ -4,22 +4,15 @@ from time import sleep
 from public.close_ad_window import close_ad_windows
 import time
 import random
-import os
 from pywinauto.controls.uiawrapper import UIAWrapper
-from pywinauto.findwindows import ElementNotFoundError
-# from pywinauto.timings import TimeoutError, wait_until
 import psutil
-from public.print_context import print_context
 from public import shared_data
 from public.shared_data import (simulate_input, trade_flag, is_trade_status,
                                 set_lots, click_position, condition_control, connect_ths)
-
-from pywinauto import mouse
-from typing import cast
-import threading
 from tools.set_cloud_bills import set_cloud_bills
-from tools.cancel_trade import cancel_trade
 from tools.play_alert import *
+from tools import unlock_mouse
+import threading
 
 _ths_watchdog_ui_lock = threading.Lock()
 
@@ -472,6 +465,7 @@ def local_control():
     # 设置期货品种的交易手数
     set_lots()
 
+
 def set_loss_profit(param: dict = None):
     """
     设置云止损止盈保本单；内部函数封装单条设置逻辑，每条完整重新打开弹窗
@@ -488,7 +482,7 @@ def set_loss_profit(param: dict = None):
             param = param.copy()
 
     fut_code = shared_data.ts_code or shared_data.default_tscode
-    print_context(f"[set_loss_profit快照｜{fut_code}] raw param: {param}")
+    # print_context(f"[set_loss_profit快照｜{fut_code}] raw param: {param}")
 
     # 清洗参数，规避 None>0 报错，统一判断语义
     with shared_data.dict_rlock:
@@ -498,7 +492,7 @@ def set_loss_profit(param: dict = None):
             param = param.copy()
 
     fut_code = shared_data.ts_code or shared_data.default_tscode
-    print_context(f"[set_loss_profit快照｜{fut_code}] raw param: {param}")
+    # print_context(f"[set_loss_profit快照｜{fut_code}] raw param: {param}")
 
     # 清洗参数，规避 None>0 报错，统一判断语义
     todo_list = []  # 云单设置列表
@@ -514,7 +508,7 @@ def set_loss_profit(param: dict = None):
         if val is not None and val > 0:
             todo_list.append((drill_type, val))
         else:
-            print_context(f"ℹ️ [{fut_code}] 跳过[{drill_type}] 设置，清洗后值={val}")
+            print_context(f"ℹ️ [{fut_code}] 跳过[{drill_type}] 设置，设置值={val}")
 
     if not todo_list:
         print_context(f"[{fut_code}] 没有需要设置的云止损/止盈参数，直接返回")
@@ -544,8 +538,8 @@ def set_loss_profit(param: dict = None):
     # 持仓面板常驻，仅一次坐标点击切到持仓Tab
     try:
         click_position(rect_tuple=(534, 747, 574, 766))
-        sleep(0.4)
-        print_context(f"[{fut_code}] ✅ 坐标点击持仓面板完成，开始等待成交后持仓行出现")
+        sleep(0.5)
+        # print_context(f"[{fut_code}] ✅ 坐标点击持仓面板完成，开始等待成交后持仓行出现")
     except Exception as e:
         print_context(f"❌ [{fut_code}] 点击持仓坐标失败：{str(e)}")
         sound_warn()
@@ -560,7 +554,7 @@ def set_loss_profit(param: dict = None):
     found = False
 
     # 保留轮询：等待撮合成交，持仓行控件出现
-    print_context(f"[{fut_code}] 等待成交持仓行控件，区域({area_left},{area_top})，最长等待{wait_total_sec}s...")
+    # print_context(f"[{fut_code}] 等待成交持仓行控件，区域({area_left},{area_top}, {area_right}, {area_bottom})，最长等待{wait_total_sec}s...")
     while time.time() - start_time < wait_total_sec:
         try:
             all_ctrls = ths_window.descendants()
@@ -592,14 +586,18 @@ def set_loss_profit(param: dict = None):
         print_context(f"❌ [{fut_code}] 等待持仓行超时{wait_total_sec}s，未找到合约持仓行，放弃本次云止损止盈设置！")
         return
 
-    print_context(f"[{fut_code}] ✅ 成功定位持仓行控件，文本：{target_ctrl.window_text()}，继续设置云单")
+    # print_context(f"[{fut_code}] ✅ 成功定位持仓行控件，文本：{target_ctrl.window_text()}，继续设置云单")
 
     # 每条云单独立捕获异常，互不干扰
+    # 解除鼠标锁定，开始设置云单
+    unlock_mouse()
+    ths_window.set_focus()
+    ths_window.maximize()
     for item in todo_list:
         drill_type, set_val = item
         try:
             set_cloud_bills(cloud_type=set_mapping[drill_type], set_value=set_val)
-            print_context(f"✅成功设置[{fut_code}] {drill_type}: {set_val}")
+            print_context(f"✅成功设置[{fut_code}] {drill_type}: {set_val} --- {datetime.now().strftime('%H:%M:%S')}")
         except Exception as e:
             print_context(f"❌ [{fut_code}] 设置{drill_type}异常：{repr(e)}")
             sound_warn()

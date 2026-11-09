@@ -5,12 +5,12 @@ common_conditions:
   - expr: "not is_cooling()"
 
 temp_params:
-  temp_profit: 30
-  temp_loss: -200
+  temp_profit: 60
+  temp_loss: 0
   valid_trade_interval: 3
-  temp_tscode: ""
+  #temp_tscode: ""
   temp_lots: 1
-  temp_hold_value: 5
+  temp_hold_value: 
   temp_direction: ""
 
 strategy_001:

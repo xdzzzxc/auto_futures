@@ -183,7 +183,9 @@ def sync_temp_params(new_pool: dict):
     temp_loss = temp_params.get("temp_loss")
     temp_valid_trade_interval = temp_params.get("valid_trade_interval")
     lots = temp_params.get("temp_lots", 1)
-    temp_hold_value = temp_params.get("temp_hold_value")
+    temp_hold_value = temp_params.get("temp_hold_value", 0)
+    if temp_hold_value is None:
+        temp_hold_value = 0
     temp_direction = temp_params.get("temp_direction", "")
     temp_tscode = temp_params.get("temp_tscode", "")
     if temp_tscode:
@@ -216,18 +218,6 @@ def sync_temp_params(new_pool: dict):
             except (ValueError, TypeError):
                 print_context(f"❌[临时参数] temp_valid_trade_interval 数值解析失败: {temp_valid_trade_interval}")
 
-        # if temp_hold_value is not None and temp_hold_value > 0:
-        #     try:
-        #         # hold_value存储原始价差，不乘手数；trade_menu_dict里面保留乘手数版本（保持原有习惯）
-        #         shared_data.trade_menu_dict["hold_value"] = float(temp_hold_value) * lots
-        #         shared_data.hold_value = float(temp_hold_value)
-        #         print_context(f"✅[临时参数热更新] hold_value(云保本单) 更新为 {temp_hold_value:.2f}")
-        #     except (ValueError, TypeError):
-        #         print_context(f"❌[临时参数] temp_hold_value 数值解析失败: {temp_hold_value}")
-        # elif temp_hold_value is None or temp_hold_value <= 0:
-        #     # yaml中temp_hold_value=null/<=0，清空shared_data.hold_value
-        #     shared_data.hold_value = None
-        #     print_context(f"ℹ️[临时参数热更新] temp_hold_value为空或<=0，清空hold_value")
 
         # 无持仓，临时止盈止损直接跳过
         if not is_trade_status():
@@ -262,13 +252,6 @@ def sync_temp_params(new_pool: dict):
                 print_context(f"✅[临时参数热更新] [{lots}手{shared_data.ts_code}] pre_loss 更新为 {tl_val:.2f}")
             except (ValueError, TypeError):
                 print_context(f"❌[临时参数] temp_loss 数值解析失败: {temp_loss}")
-        # if temp_hold_value is not None and temp_hold_value != 0 and temp_hold_value > 0:
-        #     try:
-        #         shared_data.trade_menu_dict["hold_value"] = float(temp_hold_value) * lots
-        #         shared_data.hold_value = temp_hold_value
-        #         print_context(f"✅[临时参数热更新] [{lots}手{shared_data.ts_code}] hold_value(云保本单) 更新为 {temp_hold_value:.2f}")
-        #     except (ValueError, TypeError):
-        #         print_context(f"❌[临时参数] temp_hold_value 数值解析失败: {temp_hold_value}")
 
 def load_config_pool(yaml_path: str = CFG_POOL_PATH) -> dict:
     """
@@ -845,11 +828,23 @@ def calc_trade_pnl(trade_dir: str, cur_price: float, loss_price: float, profit_p
     pnl_profit = 0.0
     total_fee_all = total_fee * lot_size
     if trade_dir == "rise":
-        pnl_loss = (loss_price - cur_price) * coefficient * lot_size - total_fee_all
-        pnl_profit = (profit_price - cur_price) * coefficient * lot_size - total_fee_all
+        if loss_price == 0:
+            pnl_loss = 0
+        else:
+            pnl_loss = (loss_price - cur_price) * coefficient * lot_size - total_fee_all
+        if profit_price == 0:
+            pnl_profit = 0
+        else:
+            pnl_profit = (profit_price - cur_price) * coefficient * lot_size - total_fee_all
     elif trade_dir == "fall":
-        pnl_loss = (cur_price - loss_price) * coefficient * lot_size - total_fee_all
-        pnl_profit = (cur_price - profit_price) * coefficient * lot_size - total_fee_all
+        if loss_price == 0:
+            pnl_loss = 0
+        else:
+            pnl_loss = (cur_price - loss_price) * coefficient * lot_size - total_fee_all
+        if profit_price == 0:
+            pnl_profit = 0
+        else:
+            pnl_profit = (cur_price - profit_price) * coefficient * lot_size - total_fee_all
     print_context(f"\n[预算]>>> 多空 {trade_dir} 手数：{lot_size} 手续费：{total_fee_all}\n"
                   f"亏损：{pnl_loss} 盈利：{pnl_profit}\n")
     return {
@@ -1119,7 +1114,7 @@ def order(ts_code=None):
                             # ---------------- temp_hold_value 优先逻辑【新增】----------------
                             temp_params = config_pool.get("temp_params", {})
                             temp_hold_val = temp_params.get("temp_hold_value", 0)
-                            if temp_hold_val > 0:
+                            if (temp_hold_val or 0) > 0:
                                 pick_spread = temp_hold_val
                                 print_context(f"📌临时参数生效：temp_hold_value={temp_hold_val}，跳过自动保本测算")
                             else:
@@ -1134,6 +1129,27 @@ def order(ts_code=None):
                                 f"pre_profit(单手)={shared_data.pre_profit:.2f}, coefficient={coefficient} → 最终hold_value={final_cloud_break}"
                             )
 
+                            # =====新规则保本差值计算方法=====
+                            temp_params = config_pool.get("temp_params", {})
+                            temp_hold_val = temp_params.get("temp_hold_value", 0)
+                            if temp_hold_val is None:
+                                temp_hold_val = 0
+
+                            # 规则分支：优先判断是否存在有效固定止盈pre_profit
+                            if shared_data.pre_profit > 0:
+                                # 有固定止盈：保本差值 = (pre_profit / coefficient)
+                                if coefficient > 0:
+                                    pick_spread = (shared_data.pre_profit / coefficient)
+                                else:
+                                    pick_spread = 0
+                                print_context(
+                                    f"📐保本差值【固定止盈分支】：pre_profit={shared_data.pre_profit:.2f}, coefficient={coefficient}, lot_size={lot_size} → pick_spread={pick_spread:.2f}")
+                            else:
+                                # 无有效固定止盈：使用temp_hold_value，0/空则不启用保本
+                                pick_spread = temp_hold_val
+                                print_context(
+                                    f"📐保本差值【临时参数分支】：pre_profit无有效值，使用temp_hold_value={temp_hold_val}")
+
                             print_context(f"📌策略已配置pre_profit/pre_loss，使用策略原始云参数，保本值由盈亏计算")
 
                             shared_data.hold_value = final_cloud_break
@@ -1144,12 +1160,12 @@ def order(ts_code=None):
                             # 下单时务必打印完整设置信息
                             set_msg = (
                                 f"【下单设置详情 - {'模拟用户' if shared_data.user_type == 0 else '君安用户'}】 | "
-                                f"交易持仓时间： {datetime.now().strftime('%H:%M:%S')}\n品种:{ts_code},"
+                                f"交易下单时间： {datetime.now().strftime('%H:%M:%S')}\n品种:{ts_code},"
                                 f"方向:{trade_dir},手数lot_size={lot_size}\n"
                                 f"成交参考价cur_price={cur_price:.2f} 固定止盈(期值)：{shared_data.pre_profit:.2f} "
                                 f"固定止损(期值)：{shared_data.pre_loss:.2f}\n"
                                 f"止盈盈亏(差价)={calc_profit_val:.2f}元\n"
-                                f"交易价：{shared_data.trade_menu_dict.get('trade_time', '----')}\n"
+                                f"市场撮合时间：{shared_data.trade_menu_dict.get('trade_time', '----')}\n"
                                 f"云止盈价={final_cloud_profit},云止损价={final_cloud_loss},云保本差价={final_cloud_break}"
                             )
                             print_context(f"{set_msg}")

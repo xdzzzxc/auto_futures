@@ -15,33 +15,33 @@ import os, json
 # 导入计数写入函数
 from core.private import append_close_record
 from core.connect_ths import set_loss_profit
-from public.jiaoyisuo import get_future_info
+import re
 from public.jiaoyisuo import get_future_info
 
 logger = setup_trade_loggers()
-#
+
 UI_DELAY_SHORT = 0.2
 MONITOR_INTERVAL = 0.5
 # NO_HOLD_PRINT_INTERVAL = 6000  # 无持仓每60秒打印一次，不刷屏
 TRADE_INTERVAL = shared_data.valid_trade_interval if shared_data.valid_trade_interval else 300
 
 
-# 新增：读取trade_log.json获取今日交易次数、累计盈亏
 def get_profit_loss_ctrl():
     with variables_rlock:
         ts_code = shared_data.ts_code or shared_data.default_tscode
     ts_code_cn = get_future_info(ts_code).get("name", "")
     find_code_full_code = ts_code_cn + ts_code[-4:] + r".*手.*仓.*"
+    pattern = re.compile(find_code_full_code)
+
     ths_window = trade_window or connect_ths()
-    # 关键：descendants 代替 child_window，避免多匹配歧义报错
-    candidates = ths_window.descendants(control_type="Text", title_re=find_code_full_code)
-    if not candidates:
+    # 先取出所有Text控件，不再传title_re
+    candidates = ths_window.descendants(control_type="Text")
+    # 自己正则过滤
+    match_list = [ctrl for ctrl in candidates if pattern.search(ctrl.window_text())]
+
+    if not match_list:
         raise ElementNotFoundError(f"未找到持仓行控件：{find_code_full_code}")
-    return candidates[0]
-
-
-
-
+    return match_list[0]
 
 def get_today_trade_stat():
     log_path = os.path.join(get_data_cache_dir(), "trade_log","trade_log.json")
@@ -184,7 +184,7 @@ def monitor_profit_loss():
                     f"【实盘账户】平仓次数：{real_cnt}，累计毛盈亏：{real_pnl:.2f}元"
                 )
                 send_msg(f"自动平仓成功 - 品种：{ts_code_arg}\n{full_msg}")
-                print_context(f"自动平仓 [{datetime.now().strftime('%H:%M:%S')}]")
+                # print_context(f"自动平仓 [{datetime.now().strftime('%H:%M:%S')}]")
                 reset_temp_params_in_yaml()
             else:
                 print_context("_trade: 平仓按钮点击返回False")

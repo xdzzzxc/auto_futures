@@ -133,7 +133,7 @@ def get_open_price(ts_code = None):
                         data = json.load(fp)
                     shared_data.open_price = {target_code: data}
                     if print_once:
-                        print_context.print_context(f"[{datetime.now().strftime('%H:%M:%S')}] ✅ 命中缓存 {os.path.basename(file_td)}")
+                        print_context.print_context(f"[{datetime.now().strftime('%H:%M:%S')}] ✅ 本地缓存获取开盘信息 >>> {os.path.basename(file_td)}")
                         print_once = False
                     sleep(30)
                     continue

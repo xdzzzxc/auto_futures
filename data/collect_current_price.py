@@ -8,8 +8,8 @@ from time import sleep
 from public.shared_data import click_control
 
 # 取消时间间隔判断，固定满100条入库
-BUFFER_MAX_NUM_NORMAL = 100
-BUFFER_MAX_NUM_EARLY = 3  # 开盘前5分钟阈值：3条
+BUFFER_MAX_NUM_NORMAL = 2000
+# BUFFER_MAX_NUM_EARLY = 3  # 开盘前5分钟阈值：3条
 
 def get_current_price(ts_code="m2611"):
     from public.shared_data import simulate_input
@@ -81,16 +81,6 @@ def get_current_price(ts_code="m2611"):
             continue
         is_printed = False
 
-        # # ==========【新增：判断当前是否处于开盘前5分钟，选择入库阈值】==========
-        # now = datetime.now()
-        # hh = now.hour
-        # mm = now.minute
-        # in_early_window = False
-        # if (hh == 9 and mm < 5) or (hh == 21 and mm < 5):
-        #     in_early_window = True
-        # current_buf_limit = BUFFER_MAX_NUM_EARLY if in_early_window else BUFFER_MAX_NUM_NORMAL
-        # # ============================
-
         date_str = datetime.now().strftime("%Y%m%d%H%M%S")
         write_batch = None
         try:
@@ -115,7 +105,7 @@ def get_current_price(ts_code="m2611"):
             # 执行批量写入
             if write_batch:
                 batch_write_price(write_batch)
-                print_context(f"[{datetime.now()}] 缓存满{BUFFER_MAX_NUM_NORMAL}条，批量入库，共{len(write_batch)}条")
+                print_context(f"[{datetime.now().strftime('%H:%M:%S')}] 缓存满{BUFFER_MAX_NUM_NORMAL}条，批量入库，共{len(write_batch)}条")
         except Exception:
             sleep(0.2)
             continue

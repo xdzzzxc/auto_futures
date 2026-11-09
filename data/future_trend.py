@@ -201,7 +201,7 @@ def get_data_from_ja(fut_type=0):
     if not html:
         # 页面失败，对quote_list全部填充占位
         for contract in shared_data.quote_list:
-            result[contract] = ["noinfo", f"暂无国泰君安资讯 - {contract}"]
+            result[contract] = ["sideways", f"暂无国泰君安资讯 - {contract}"]
         end_time = time.time()
         print_context(f"获取国泰君安期货资讯耗时：{end_time - start_time:.2f}秒。")
         return result
@@ -255,7 +255,7 @@ def get_data_from_ja(fut_type=0):
     # 补齐quote_list全部占位
     for contract in shared_data.quote_list:
         if contract and contract not in result:
-            result[contract] = ["noinfo", f"暂无国泰君安资讯 - {contract}"]
+            result[contract] = ["sideways", f"暂无国泰君安资讯 - {contract}"]
 
     end_time = time.time()
     print_context(f"获取国泰君安期货资讯耗时：{end_time - start_time:.2f}秒。")
@@ -284,19 +284,28 @@ def merge_two_info_dict() -> Dict[str, List[str]]:
             merged[k] = [trend_b, text_b]
 
     merged = filter_by_white_list(merged)
-    for k, v in merged.items():
-        if v[0] == "noinfo":
-            direction_dict[k] = "sideways"
+
+    # ========== 修复点：强制遍历全部quote_list，而不是只遍历merged的key，杜绝残留 ==========
+    for contract in shared_data.quote_list:
+        if contract in merged:
+            v = merged[contract]
+            if v[0] == "noinfo":
+                direction_dict[contract] = "sideways"
+            else:
+                direction_dict[contract] = v[0]
         else:
-            direction_dict[k] = v[0]
+            # 极端情况：合约不在merged里，兜底sideways
+            direction_dict[contract] = "sideways"
+
     print(f"查询品种走势结果（字典数据）: {direction_dict}")
     return merged
+
 
 
 # ===================== 测试运行 =====================
 if __name__ == "__main__":
     # 测试时手动给quote_list赋值，正式运行由公共模块初始化
-    shared_data.quote_list = ["m2611", "c2611", "jd2611", "ma2611", "sa2611", "ta2611", "rb2611"]
+    shared_data.quote_list = ["m2711"]
     # res = get_data_from_em()
     # print(res)
     # # print(query_future_info())
