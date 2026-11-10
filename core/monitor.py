@@ -206,8 +206,9 @@ def monitor_profit_loss():
 
     # 初始定位盈亏控件，失败不崩，下一轮自愈
     try:
-        shared_data.ths_common_control['盈亏'][0] = get_profit_loss_ctrl()
-        print_context("✅盈亏控件初始定位成功")
+        yk_ctrl = get_profit_loss_ctrl()
+        shared_data.ths_common_control['盈亏'][0] = yk_ctrl
+        print_context(f"✅盈亏控件初始定位成功 - {yk_ctrl.window_text()}")
     except Exception as e:
         print_context(f"⚠️盈亏控件初始定位失败，等待自愈：{str(e)}")
 

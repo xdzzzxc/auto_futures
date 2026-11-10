@@ -188,14 +188,14 @@ def sync_temp_params(new_pool: dict):
     if temp_hold_value is None:
         temp_hold_value = 0
     temp_direction = temp_params.get("temp_direction", "")
-    temp_tscode = temp_params.get("temp_tscode", "")
-    if temp_tscode:
-        with variables_rlock:
-            shared_data.ts_code = temp_tscode
-            print_context(f"✅[临时参数热更新] [shared_data.ts_code]交易品种变更为：{temp_tscode}")
-    else:
-        with variables_rlock:
-            print_context(f"已选择的交易品种（shared_data.ts_code）：{shared_data.ts_code}")
+    # temp_tscode = temp_params.get("temp_tscode", "")
+    # if temp_tscode:
+    #     with variables_rlock:
+    #         shared_data.ts_code = temp_tscode
+    #         print_context(f"✅[临时参数热更新] [shared_data.ts_code]交易品种变更为：{temp_tscode}")
+    # else:
+    #     with variables_rlock:
+    #         print_context(f"已选择的交易品种（shared_data.ts_code）：{shared_data.ts_code}")
     with variables_rlock:
         if temp_direction:
             with variables_rlock:
@@ -203,7 +203,7 @@ def sync_temp_params(new_pool: dict):
                 print_context(f"✅[临时参数热更新] [{shared_data.ts_code}]大盘走势已变更为：{temp_direction}")
         else:
             with variables_rlock:
-                print_context(f"[{shared_data.ts_code}]今日交易大盘方向（已选）：{shared_data.direction}")
+                print_context(f"[{shared_data.ts_code}]今日交易大盘方向（已选，未变更）：{shared_data.direction}")
         if temp_hold_value > 1:
             with variables_rlock:
                 shared_data.hold_value = int(temp_hold_value)

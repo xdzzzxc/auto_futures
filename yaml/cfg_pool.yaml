@@ -8,10 +8,9 @@ temp_params:
   temp_profit: 50
   temp_loss:
   valid_trade_interval: 3
-  #temp_tscode: ""
   temp_lots: 1
   temp_hold_value: 4
-  temp_direction: sideways
+  temp_direction: 
 
 
 strategy_001:
