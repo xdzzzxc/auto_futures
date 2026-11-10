@@ -499,7 +499,7 @@ def set_lots(window=None, fut_ctrl=None, fut_lots=1):
             tscode_lots_dict.update({ts_code: fut_lots})
 
 
-def get_data_cache_dir(marker=None):
+def get_data_cache_dir(marker=None, folder: int=0):
     from pathlib import Path
     if marker is None:
         marker = [".git", "requirements.txt", "main.py"]
@@ -513,7 +513,7 @@ def get_data_cache_dir(marker=None):
         raise FileNotFoundError("找不到项目根目录标记文件")
     cache_folder = root_dir / "data" / "futures_data"
     cache_folder.mkdir(parents=True, exist_ok=True)
-    return str(cache_folder)
+    return str(cache_folder) if folder == 0 else str(root_dir)
 
 # 统一弹窗的写法,目前暂未复用,如有必要请在main.py模块中参照修改
 # def get_direction(title="交易方向", msg=None) -> str | None:
@@ -610,5 +610,6 @@ if __name__ == "__main__":
     # click_position(rect_tuple=(100,100,200,200))
     # print(is_trade_status())
     # click_control(text="锁仓", control_type="Text", click_btn=0)
-    connect_ths()
+    # connect_ths()
+    print(get_data_cache_dir( folder=1))
     pass

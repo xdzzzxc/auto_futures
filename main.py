@@ -21,6 +21,7 @@ from public.shared_data import clean_old_trade_db, default_lots_dict
 from audio.play_alert import *
 from tools.fetch_future_trend import poll_stop_event, trend_poll_loop
 
+
 TIMEOUT_SEC = 6
 
 def global_exception_handler(exc_type, exc_value, exc_traceback):
@@ -91,7 +92,7 @@ def get_direction(title="交易方向", msg=None) -> str | None:
         if is_auto:
             print_context(f"程序自动输入交易方向的默认值：{result}")
         else:
-            print_context(f"人工手动输入交易方向值：{result}")
+            print_context(f"人工手动选择交易方向：{result}")
         root.destroy()
 
     def cancel():

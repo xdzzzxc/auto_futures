@@ -14,7 +14,7 @@ import ast
 from core.monitor import auto_trade
 import signal
 from audio.play_alert import *
-from ruamel.yaml import YAML
+from ruamel.yaml import YAML, YAMLError
 from core.private import get_user_today_trade_stat
 import traceback
 from pathlib import Path
@@ -130,8 +130,9 @@ signal.signal(signal.SIGTERM, sig_handler)
 
 # 配置文件路径 & 文件修改时间记录
 # 获取trade.py脚本所在目录，cfg_pool.yaml和trade.py放在同一个文件夹
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CFG_POOL_PATH = os.path.join(_BASE_DIR, "cfg_pool.yaml")
+_BASE_DIR = get_data_cache_dir(folder=1)
+CFG_POOL_PATH = os.path.join(_BASE_DIR, "yaml", "cfg_pool.yaml")
+print_context(f"本项目策略文件路径：{CFG_POOL_PATH}")
 _last_cfg_mtime = 0.0
 config_pool = None  # 惰性初始化，不在import阶段加载
 
@@ -253,31 +254,19 @@ def sync_temp_params(new_pool: dict):
             except (ValueError, TypeError):
                 print_context(f"❌[临时参数] temp_loss 数值解析失败: {temp_loss}")
 
-def load_config_pool(yaml_path: str = CFG_POOL_PATH) -> dict:
-    """
-    从yaml加载条件策略池，返回和原config_pool完全同结构字典
-    :param yaml_path: 配置文件路径
-    :return: config_pool dict
-    """
+def load_config_pool(yaml_path: str):
     try:
-        with variables_rlock:
-            with open(yaml_path, "r", encoding="utf-8") as f:
-                pool = yaml.load(f)
-            if pool is None:
-                print_context("⚠️策略yaml文件为空，返回空策略池")
-                return {}
-            strategy_count = len(pool) - (1 if "common_conditions" in pool else 0)
-            print_context(f"\n✅成功加载策略配置文件 {yaml_path}，共读取 {strategy_count} 条策略  [ {datetime.now().strftime('%H:%M:%S')} ]")
-            return pool
-    except FileNotFoundError:
-        print_context(f"❌找不到策略配置文件:{yaml_path}")
-        return {}
-    except yaml.YAMLError as ye:
-        print_context(f"❌YAML语法解析错误：{str(ye)}")
-        return {}
+        with open(yaml_path, "r", encoding="utf-8") as f:
+            pool_data = yaml.load(f)
+        return pool_data
+    except YAMLError as e:
+        sound_warning()
+        print_context(f"❌ YAML解析语法错误：{e}")
+        return None
     except Exception as e:
-        print_context(f"加载策略池异常：{str(e)}")
-        return {}
+        sound_warning()
+        print_context(f"❌ load_config_pool加载异常：{e}")
+        return None
 
 def reload_config_pool(yaml_path: str = CFG_POOL_PATH) -> dict:
     """热重载yaml策略，更新全局config_pool，外部可直接调用"""
@@ -299,10 +288,12 @@ def auto_reload_cfg_if_changed():
     try:
         mtime = os.stat(CFG_POOL_PATH).st_mtime
         if mtime > _last_cfg_mtime:
-            print_context("\n🔍检测到cfg_pool.yaml已修改，执行热重载...")
+            print_context(f"\n[{datetime.now().strftime('%H:%M:%S')}] 🔍检测到cfg_pool.yaml已修改，执行热重载...")
             reload_config_pool(CFG_POOL_PATH)
     except Exception as e:
         print_context(f"\n检测配置文件变更异常：{e}")
+
+
 
 
 def wait_position_filled(target_ts_code: str, max_wait_sec=60, poll_interval=1.0) -> bool:
@@ -784,7 +775,7 @@ def scan_all_rules(pool: dict, market_ctx: dict):
             ok, fails, condition_detail = check_rule(rule_data, merged_cond, market_ctx, rule_name)
         except Exception as e:
             sound_warning()
-            print_context(f"{'-'*30}策略[{rule_name}]条件明细{'-'*30}")
+            print_context(f"严重警告：{'-'*30}策略[{rule_name}]条件明细{'-'*30}")
             print_context(f"❌策略整体异常：{str(e)}")
             detail_map[rule_name] = (False, [{"expr": "", "reason": f"策略整体异常:{str(e)}", "actual": {}}], [])
             print("\n")
@@ -1205,7 +1196,7 @@ if __name__ == "__main__":
     # reset_temp_params_in_yaml()
     print(get_market_ctx())
     # get_db_data(ts_code="m2611")
-    # order(ts_code="m2611")
+    order(ts_code="m2611")
     # reload_config_pool()  # 测试热加载
 
     # print(get_db_data(ts_code="m2611"))

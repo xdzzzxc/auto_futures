@@ -6,9 +6,9 @@ import chardet
 import requests
 from lxml import etree
 from typing import Dict, Optional, List, Tuple
-from playwright.sync_api import sync_playwright, TimeoutError
+from playwright.sync_api import sync_playwright, TimeoutError, Browser, Page
 import threading
-
+from tools.write_yaml import set_temp_param
 from public import shared_data
 from public.agent import get_headers
 from public.print_context import print_context
@@ -48,6 +48,28 @@ FUTURES_ALIAS = {
 }
 CN_TO_CODE = {v: k for k, v in FUTURES_MAP.items()}
 
+# ===================== 全局Playwright单例（复用浏览器，避免频繁启动） =====================
+class PlaywrightSingleton:
+    _instance = None
+    _browser: Optional[Browser] = None
+    _pw = None
+
+    @classmethod
+    def get_browser(cls) -> Browser:
+        if cls._instance is None:
+            cls._pw = sync_playwright().start()
+            cls._browser = cls._pw.chromium.launch(headless=True)
+            cls._instance = True
+        return cls._browser
+
+    @classmethod
+    def close(cls):
+        if cls._browser:
+            cls._browser.close()
+        if cls._pw:
+            cls._pw.stop()
+        cls._instance = None
+
 # ===================== 观点分类器 =====================
 class FutureViewJudge:
     def __init__(self):
@@ -76,6 +98,7 @@ class FutureViewJudge:
 
     def judge(self, text: str) -> Dict:
         raw_text = text.strip()
+        # 反转词优先
         for phrase, tag in self.reverse_words.items():
             if phrase in raw_text:
                 direction = "多" if tag == "bull" else "空"
@@ -91,25 +114,30 @@ class FutureViewJudge:
         bear_hits = [w for w in self.bear_words if w in raw_text]
         shock_hits = [w for w in self.shock_words if w in raw_text]
 
+        # 修正：双向判断否定词，不管否定词在前还是在后
         for neg in self.neg_words:
-            if neg in raw_text:
-                neg_pos = raw_text.find(neg)
-                for w in bull_hits.copy():
-                    w_pos = raw_text.find(w)
-                    if 0 < (w_pos - neg_pos) < 12:
-                        bull_hits.remove(w)
-                for w in bear_hits.copy():
-                    w_pos = raw_text.find(w)
-                    if 0 < (w_pos - neg_pos) < 12:
-                        bear_hits.remove(w)
+            neg_pos = raw_text.find(neg)
+            if neg_pos == -1:
+                continue
+            for w in bull_hits.copy():
+                w_pos = raw_text.find(w)
+                if w_pos != -1 and abs(w_pos - neg_pos) < 12:
+                    bull_hits.remove(w)
+            for w in bear_hits.copy():
+                w_pos = raw_text.find(w)
+                if w_pos != -1 and abs(w_pos - neg_pos) < 12:
+                    bear_hits.remove(w)
+
         term = "未知"
         if any(w in raw_text for w in self.short_term):
             term = "短期"
         elif any(w in raw_text for w in self.long_term):
             term = "中长期"
+
         b_cnt = len(bull_hits)
         be_cnt = len(bear_hits)
         s_cnt = len(shock_hits)
+
         if s_cnt > 0 and b_cnt == 0 and be_cnt == 0:
             return {
                 "raw_text": raw_text,
@@ -146,6 +174,7 @@ class FutureViewJudge:
                 "hit_words": [],
                 "note": "关键词不足或多空同时存在"
             }
+
 
 judge_ins = FutureViewJudge()
 DIR_MAP = {"多": "rise", "空": "fall", "震荡": "sideways", "无法判断": "sideways"}
@@ -189,21 +218,17 @@ def _query_cngold_single(short_code: str) -> Tuple[Optional[str], str, Dict]:
     except Exception as e:
         print_context(f"金投网解析异常: {e}")
         return None, "", {}
+
     cn_name = FUTURES_MAP.get(short_code)
     if not cn_name:
         return None, "", {}
     alias_list = FUTURES_ALIAS.get(cn_name, [cn_name])
     for dt, ct, tt, full in all_news:
-        hit_alias = None
         for alias in alias_list:
             if alias in full:
-                hit_alias = alias
-                break
-        if hit_alias is None:
-            continue
-        res = judge_ins.judge(full)
-        trend = DIR_MAP[res["direction"]]
-        return trend, full, res
+                res = judge_ins.judge(full)
+                trend = DIR_MAP[res["direction"]]
+                return trend, full, res
     return None, "", {}
 
 # ------------------------------ 国泰君安抓取 ------------------------------
@@ -212,19 +237,21 @@ def _query_gtja_single(short_code: str, fut_type=0) -> Tuple[Optional[str], str,
     text_node_name = "ListReport_list_item_text__q3vke"
     date_node_name = "ListReport_list_item_date__E9q2p"
     html = ""
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        try:
-            page.goto(url, timeout=20000)
-            page.wait_for_selector(f'span[class*="{text_node_name}"]', timeout=8000)
-            html = page.content()
-        except TimeoutError:
-            html = ""
-        finally:
-            browser.close()
+    try:
+        browser = PlaywrightSingleton.get_browser()
+        page: Page = browser.new_page()
+        page.goto(url, timeout=20000)
+        page.wait_for_selector(f'span[class*="{text_node_name}"]', timeout=8000)
+        html = page.content()
+        page.close()
+    except TimeoutError:
+        html = ""
+    except Exception as e:
+        print_context(f"国泰君安页面异常: {e}")
+        html = ""
     if not html:
         return None, "", {}
+
     tree = etree.HTML(html)
     text_nodes = tree.xpath(f'//span[contains(@class,"{text_node_name}")]')
     date_nodes = tree.xpath(f'//span[contains(@class,"{date_node_name}")]')
@@ -234,44 +261,48 @@ def _query_gtja_single(short_code: str, fut_type=0) -> Tuple[Optional[str], str,
         pub_dt = d_node.xpath("string(.)").strip()
         if txt:
             raw_bundle.append((txt, pub_dt))
-    today_str = datetime.now().strftime("%Y/%m/%d")
+
+    # 日期标准化清洗，横杠/斜杠统一
+    today_str = datetime.now().strftime("%Y%m%d")
     valid_bundle = []
     for txt, pub_dt in raw_bundle:
-        if pub_dt.strip() == today_str:
+        clean_dt = re.sub(r"[-/]", "", pub_dt.strip())
+        if clean_dt == today_str:
             valid_bundle.append((txt, pub_dt))
+
     cn_name = FUTURES_MAP.get(short_code)
     if not cn_name:
         return None, "", {}
     alias_list = FUTURES_ALIAS.get(cn_name, [cn_name])
     for content_text, pub_time in valid_bundle:
-        hit_alias = None
         for alias in alias_list:
             if alias in content_text:
-                hit_alias = alias
-                break
-        if hit_alias is None:
-            continue
-        out_text = f"国泰君安简讯 - {pub_time} - {content_text}"
-        res = judge_ins.judge(out_text)
-        trend = DIR_MAP[res["direction"]]
-        return trend, out_text, res
+                out_text = f"国泰君安简讯 - {pub_time} - {content_text}"
+                res = judge_ins.judge(out_text)
+                trend = DIR_MAP[res["direction"]]
+                return trend, out_text, res
     return None, "", {}
 
 # ===================== 对外主入口：单品种资讯查询 =====================
-def fetch_future_trend(ts_code: str) -> List:
+def fetch_future_trend(ts_code: str) -> Tuple[str, str, Dict]:
     """
     :param ts_code: m2711 / ma2701
-    :return: [trend, info_text, judge_dict]
+    :return: (trend, info_text, judge_dict)
     trend: rise / fall / sideways
     """
     code_match = RE_CODE_EXTRACT.findall(ts_code)
     if not code_match:
-        return ["sideways", f"合约{ts_code}无法提取品种短码", {}]
+        return ("sideways", f"合约{ts_code}无法提取品种短码", {})
     short_code = code_match[0].lower()
+    # 白名单校验
     if short_code not in FUTURES_MAP:
-        return ["sideways", f"品种短码{short_code}不在品种映射表内", {}]
+        return ("sideways", f"品种短码{short_code}不在品种映射表内", {})
+    if short_code not in TARGET_WHITE_LIST:
+        return ("sideways", f"品种{short_code}不在资讯白名单，跳过", {})
+
     trend1, text1, dict1 = _query_cngold_single(short_code)
     trend2, text2, dict2 = _query_gtja_single(short_code)
+
     if trend1 is not None:
         final_trend = trend1
         final_text = text1
@@ -284,9 +315,8 @@ def fetch_future_trend(ts_code: str) -> List:
         final_trend = "sideways"
         final_text = "暂无资讯"
         final_dict = {}
-    with dict_rlock:
-        direction_dict[ts_code] = final_trend
-    return [final_trend, final_text, final_dict]
+
+    return (final_trend, final_text, final_dict)
 
 # ===================== 轮询全局停止信号 =====================
 poll_stop_event = threading.Event()
@@ -303,17 +333,13 @@ def in_trade_window(now: datetime, mode: str) -> bool:
         e = datetime.strptime("22:50:00", "%H:%M:%S").time()
         return s <= t <= e
     else:
-        # 上午
         s1s = datetime.strptime("09:00:00", "%H:%M:%S").time()
         s1e = datetime.strptime("11:20:00", "%H:%M:%S").time()
-        # 下午
         s2s = datetime.strptime("13:30:00", "%H:%M:%S").time()
         s2e = datetime.strptime("15:00:00", "%H:%M:%S").time()
-        # 夜盘
         s3s = datetime.strptime("21:00:00", "%H:%M:%S").time()
         s3e = datetime.strptime("22:50:00", "%H:%M:%S").time()
         return (s1s <= t <= s1e) or (s2s <= t <= s2e) or (s3s <= t <= s3e)
-
 
 # ===================== 轮询函数（直接丢进子线程） =====================
 def trend_poll_loop(interval_min: int = 5, mode: str = "split"):
@@ -322,29 +348,36 @@ def trend_poll_loop(interval_min: int = 5, mode: str = "split"):
     :param mode: split / full
     输出打印：{"m2701":"rise"}
     """
-
     print_context(f"【资讯轮询线程启动】mode={mode} interval={interval_min}min")
-
-    while not poll_stop_event.is_set():
-        now = datetime.now()
-        with shared_data.variables_rlock:
-            ts_code = shared_data.ts_code or shared_data.default_tscode
-        result_map: Dict[str, str] = {}
-        if in_trade_window(now, mode):
-            trend, _, _ = fetch_future_trend(ts_code)
-            # 将实时行情走势赋值给公共变量
+    try:
+        while not poll_stop_event.is_set():
+            now = datetime.now()
             with shared_data.variables_rlock:
-                shared_data.direction = trend
-            with shared_data.dict_rlock:
-                shared_data.direction_dict[ts_code] = trend
-            result_map[ts_code] = trend
-
-            print_context(f"[{datetime.now().strftime('%H:%M:%S')}]【资讯轮询结果】{result_map}\n"
-                          f"shared_data.direction_dict[ts_code]={shared_data.direction_dict}\n"
-                          f"shared_data.direction={shared_data.direction}\n")
-        # 可中断等待
-        poll_stop_event.wait(timeout=interval_min * 60)
-    print_context("【资讯轮询线程退出】")
+                ts_code = shared_data.ts_code or shared_data.default_tscode
+            result_map: Dict[str, str] = {}
+            if in_trade_window(now, mode):
+                try:
+                    trend, info_text, judge_dict = fetch_future_trend(ts_code)
+                except Exception as e:
+                    print_context(f"[{now.strftime('%H:%M:%S')}]【资讯拉取异常】{ts_code}, err={str(e)}")
+                    poll_stop_event.wait(timeout=interval_min * 60)
+                    continue
+                # 只写一次共享变量
+                with shared_data.variables_rlock:
+                    shared_data.direction = trend
+                with dict_rlock:
+                    direction_dict[ts_code] = trend
+                result_map[ts_code] = trend
+                # 写入对应合约yaml
+                set_temp_param("temp_direction", trend, ts_code=None, skip_if_same=True)
+                print_context(
+                    f"[{datetime.now().strftime('%H:%M:%S')}]【资讯轮询结果】{result_map} | trend={trend} | {info_text}"
+                )
+            poll_stop_event.wait(timeout=interval_min * 60)
+    finally:
+        # 线程退出时关闭浏览器
+        PlaywrightSingleton.close()
+        print_context("【资讯轮询线程退出】")
 
 if __name__ == '__main__':
     trend_poll_loop(mode='full', interval_min=1)
