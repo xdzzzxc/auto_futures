@@ -51170,3 +51170,4 @@ Exception: 品种代码输入校验失败，预期:m2701,实际:c2701
 2026-11-10 12:04:12 - simulation_user - INFO - main.py[501] init_shared_data - trace_id=INT - 开始初始化交易程序
 2026-11-10 12:12:16 - simulation_user - INFO - main.py[501] init_shared_data - trace_id=INT - 开始初始化交易程序
 2026-11-10 12:35:49 - simulation_user - INFO - main.py[501] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-10 12:53:50 - simulation_user - INFO - main.py[501] init_shared_data - trace_id=INT - 开始初始化交易程序

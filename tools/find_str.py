@@ -1,3 +1,6 @@
+"""
+本模块主要功能：在项目中查找指定的字符串
+"""
 import os
 import ast
 from typing import List, Optional
@@ -188,7 +191,7 @@ if __name__ == "__main__":
     # 1. find_str 不为空 → 优先执行【单个字符串搜索】search_project_string
     # 2. find_str为空、find_list非空 → 执行【指定列表批量查找shared_data成员】scan_shared_data_refs
     # 3. find_str为空、find_list为空 → 执行【全面扫描shared_data全部顶层变量/类/函数】scan_shared_data_refs(target=None)
-    find_str = 'cfg_pool.yaml'
+    find_str = 'trade.py'
     find_list = []
 
 
