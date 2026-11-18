@@ -1,4 +1,4 @@
-import threading
+from datetime import datetime
 from time import sleep
 from core.monitor import monitor_profit_loss
 from public import shared_data
@@ -557,7 +557,7 @@ def main():
     price_thread = threading.Thread(target=get_current_price, name="PriceThread", daemon=True)
     order_thread = threading.Thread(target=order, name="OrderThread", daemon=True)
     monitor_thread = threading.Thread(target=monitor_profit_loss, name="MonitorThread", daemon=True)
-    reget_open_price_thread = threading.Thread(target=get_open_price, name="ReGetOpenPriceThread", daemon=True)
+    # reget_open_price_thread = threading.Thread(target=get_open_price, name="ReGetOpenPriceThread", daemon=True)
     anti_thread = threading.Thread(target=main_daemon, name="AntiThread", daemon=True)
     watchdog = threading.Thread(target=ths_pre_check_thread, name="WatchdogThread", daemon=True)
     is_lock_position_thread = threading.Thread(target=is_lock_position, name="IsLockPositionThread", daemon=True)
@@ -572,38 +572,24 @@ def main():
     order_thread.start()
     monitor_thread.start()  # 放在后面if判断分支
     print(">>> 成功启动 自动交易监控线程！")
-    reget_open_price_thread.start()
+    # reget_open_price_thread.start()
     print(">>> 成功启动 获取品种开盘价信息线程！")
     anti_thread.start()
     print(">>> 成功启动 防屏保、杀广告窗口线程！")
     watchdog.start()
     print(">>> 成功开启 同花顺应用应用程序监控线程！")
 
-    # 检查启动同花顺后是否存在老仓，决定是否启动特殊监控程序：tools\monitor_manual_close.py
-
-    # try:
-    #     qy_val = float(shared_data.ths_common_control["权益"][0].window_text().strip().split(":")[-1])
-    #     zj_val = float(shared_data.ths_common_control["可用资金"][0].window_text().strip().split(":")[-1])
-    #     # close_text = shared_data.ths_common_control["平仓"][0].window_text().strip()
-    #     # print(f'平仓控件的文本显示：{close_text}')
-    #     if qy_val - zj_val > 1000:
-    #         from tools.monitor_manual_close import monitor_manual_close
-    #         manual_close_threading = threading.Thread(target=monitor_manual_close, name="Manual_close", daemon=True)
-    #         manual_close_threading.start()
-    #         print(">>> 成功启动 老仓交易监控程序！")
-    #     else:
-    #         print(">>> 程序没有检查到老仓的存在，正常启用 自动平仓监控线程！")
-    #         monitor_thread = threading.Thread(target=monitor_profit_loss, name="MonitorThread", daemon=True)
-    #         monitor_thread.start()
-    # except Exception as e:
-    #     print(f"{e}")
-
-
     # ===== 新增：开盘价获取放到独立子线程，休市等待不再阻塞主线程 =====
-    open_price_thread = threading.Thread(target=get_open_price, name="OpenPriceThread", daemon=True)
-    open_price_thread.start()
-    print_context("✅ 开盘价获取线程 OpenPriceThread 已启动（休市等待在子线程执行，不阻塞主线程）")
-
+    # open_price_thread = threading.Thread(target=get_open_price, name="OpenPriceThread", daemon=True)
+    # open_price_thread.start()
+    # print_context("✅ 开盘价获取线程 OpenPriceThread 已启动（休市等待在子线程执行，不阻塞主线程）")
+    # 开盘价定时刷新标记（放在main里面，init_shared_data之后）
+    quote_refresh_flag = {
+        "cold_start_done": False,
+        "refresh_0859_done": False,
+        "refresh_2059_done": False,
+        "today_date": datetime.now().strftime("%Y%m%d")
+    }
     # 开启捕获即时行情子线程
     trend_poll_loop_thread = threading.Thread(
         target=trend_poll_loop,
@@ -611,20 +597,43 @@ def main():
         daemon=True
     )
     trend_poll_loop_thread.start()
-    # 把线程放到列表里方便后续模块调用查看线程的存活状态
-    # shared_data.thread_list = []
-    # shared_data.thread_list.extend([
-    #     price_thread,
-    #     order_thread,
-    #     monitor_thread,
-    #     reget_open_price_thread,
-    #     anti_thread,
-    #     watchdog,
-    #     open_price_thread
-    # ])
 
     try:
         while True:
+            now = datetime.now()
+            now_str = now.strftime("%Y%m%d")
+            hh = now.hour
+            mm = now.minute
+            # 跨天重置所有标记
+            if now_str != quote_refresh_flag["today_date"]:
+                quote_refresh_flag["today_date"] = now_str
+                quote_refresh_flag["cold_start_done"] = False
+                quote_refresh_flag["refresh_0859_done"] = False
+                quote_refresh_flag["refresh_2059_done"] = False
+                print_context(f"[开盘价] 跨天，重置全部刷新标记，新日期：{now_str}")
+            need_run = False
+            # 1. 冷启动：第一次进来直接执行一次
+            if not quote_refresh_flag["cold_start_done"]:
+                need_run = True
+                quote_refresh_flag["cold_start_done"] = True
+                print_context("[开盘价] 冷启动触发，执行 get_open_price")
+
+            # 2. 08:59 触发，当日只一次
+            if hh == 8 and mm == 59 and not quote_refresh_flag["refresh_0859_done"]:
+                need_run = True
+                quote_refresh_flag["refresh_0859_done"] = True
+                print_context("[开盘价] 08:59 定时刷新触发，执行 get_open_price")
+
+            # 3. 20:59 触发，当日只一次
+            if hh == 20 and mm == 59 and not quote_refresh_flag["refresh_2059_done"]:
+                need_run = True
+                quote_refresh_flag["refresh_2059_done"] = True
+                print_context("[开盘价] 20:59 定时刷新触发，执行 get_open_price")
+
+            if need_run:
+                # 调用get_open_price，内部自带缓存、网络、手动录入兜底逻辑
+                get_open_price()
+                
             sleep(1)
     except KeyboardInterrupt:
         flush_remain_buffer()

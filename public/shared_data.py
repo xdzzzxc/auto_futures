@@ -37,7 +37,7 @@ valid_time = None  # 通过上面参数和具体交易时间决定下一次的�
 market_ctx_dict = {}  # cfg_pool.yaml文件读写上下文命名空间
 
 # 期货品种即时行情价格缓冲区及相关安全配置
-get_price_interval = 2  # 从同花顺窗口读取即时价格的时间间隔，默认为2秒
+get_price_interval = 1  # 从同花顺窗口读取即时价格的时间间隔，默认为1秒
 k_minutes = 3  # 设置指定时长的最后一根K线的时间（分钟）
 current_price_dict = {}  # 即时行情中的期货商品买卖价格
 
@@ -60,7 +60,7 @@ login_control = {}  # 登录期货通交易软件
 ths_common_control = {}  # 交易平台常用控件字典,此处为多进程管理模式，以便进程数据共享
 condition_control = {}  # 条件单窗口控件映射字典
 logger: logging.Logger | None = None  # 根据用户选择的日志器
-quote_list = ["c2701", "m2701"]  # 默认要从东方财富网获取开盘价等信息的期货品种
+quote_list = ["m2701", "c2701"]  # 默认要从东方财富网获取开盘价等信息的期货品种
 ts_code = ""  # 期货商品代码（如au2601)通过人工手动选择后作为本次交易主体品种
 default_tscode = "c2701"  # 当在无人进入期货交易时，自动选择该期货品种作为当日的交易品种
 # search_future_list = []  # 待搜索的期货商品代码列表

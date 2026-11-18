@@ -186,17 +186,15 @@ def sync_temp_params(new_pool: dict):
     temp_valid_trade_interval = temp_params.get("valid_trade_interval")
     lots = temp_params.get("temp_lots", 1)
     temp_hold_value = temp_params.get("temp_hold_value", 0)
+    temp_get_price_interval = temp_params.get("temp_get_price_interval", 1)
     if temp_hold_value is None:
         temp_hold_value = 0
     temp_direction = temp_params.get("temp_direction", "")
-    # temp_tscode = temp_params.get("temp_tscode", "")
-    # if temp_tscode:
-    #     with variables_rlock:
-    #         shared_data.ts_code = temp_tscode
-    #         print_context(f"✅[临时参数热更新] [shared_data.ts_code]交易品种变更为：{temp_tscode}")
-    # else:
-    #     with variables_rlock:
-    #         print_context(f"已选择的交易品种（shared_data.ts_code）：{shared_data.ts_code}")
+
+    if temp_get_price_interval is not None or temp_valid_trade_interval != 0:
+        with shared_data.variables_rlock:
+            shared_data.get_price_interval = temp_get_price_interval
+            print_context(f"✅[临时参数热更新] 获取交易品种实时价格频率已变更为：{temp_get_price_interval}")
     with variables_rlock:
         if temp_direction:
             with variables_rlock:
@@ -1205,7 +1203,8 @@ if __name__ == "__main__":
     from core.connect_ths import local_control
 
     shared_data.ts_code = "c2701"
-    get_market_ctx()
+    res = get_market_ctx()
+    print(res)
     # local_control()
     # select_best_trade_rule(ts_code='m2701')
     # order()
