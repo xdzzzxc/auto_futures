@@ -20,7 +20,7 @@ from public.anti_screensaver import main_daemon
 from public.shared_data import clean_old_trade_db, default_lots_dict
 from audio.play_alert import *
 from tools.fetch_future_trend import poll_stop_event, trend_poll_loop
-
+from core.monitor_multi_position import is_lock_position, monitor_multi_position_profit_loss
 
 TIMEOUT_SEC = 6
 
@@ -560,7 +560,13 @@ def main():
     reget_open_price_thread = threading.Thread(target=get_open_price, name="ReGetOpenPriceThread", daemon=True)
     anti_thread = threading.Thread(target=main_daemon, name="AntiThread", daemon=True)
     watchdog = threading.Thread(target=ths_pre_check_thread, name="WatchdogThread", daemon=True)
+    is_lock_position_thread = threading.Thread(target=is_lock_position, name="IsLockPositionThread", daemon=True)
+    monitor_multi_position_profit_loss_thread = threading.Thread(target=monitor_multi_position_profit_loss, name="MonitorLockPositionProfitLossThread", daemon=True)
     # 统一全部start，消除时序分散问题
+    is_lock_position_thread.start()
+    print(">>> [is_lock_position_thread]交易仓类型监控线程已开启！")
+    monitor_multi_position_profit_loss_thread.start()
+    print(">>> [monitor_multi_position_profit_loss_thread]锁仓交易监控线程已开启！")
     price_thread.start()
     print(">>> 【price_thread】成功启动 获取品种实时价格线程!")
     order_thread.start()

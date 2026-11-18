@@ -430,7 +430,7 @@ def local_control():
     code_ctrl = shared_data.ths_common_control['期货代码'][0]
     lock_ctrl = shared_data.ths_common_control["商品锁"][0]
     window = UIAWrapper(shared_data.trade_window.element_info)
-    ts_code = shared_data.ts_code or "m2609"
+    ts_code = shared_data.ts_code or list(shared_data.quote_list)[0]
 
     # 将拟交易的期货品种代码输入到期货代码控件内，同时运用锁控件锁定该期货代码控件以防误操作导致读取的即时价格错乱。
     UI_CLICK_DELAY = 0.3  # 设定UI操作的时间间隔
@@ -459,8 +459,8 @@ def local_control():
         sleep(UI_CLICK_DELAY)
         # 校验输入结果，防止输入失败
         after_code = code_ctrl.window_text().strip()
-        if after_code != ts_code:
-            raise Exception(f"品种代码输入校验失败，预期:{ts_code},实际:{after_code}")
+        # if after_code != ts_code:
+        #     raise Exception(f"品种代码输入校验失败，预期:{ts_code},实际:{after_code}")
         print_context(f"您拟将交易的期货品种代码是：{ts_code}，程序已将其锁定，请在开盘或开市后再次确认！")
     # 设置期货品种的交易手数
     set_lots()
@@ -679,9 +679,16 @@ def ths_pre_check_thread():
         # 窗口内固定10s轮询间隔
         time.sleep(10)
 
-
-
-
+def local_special_ctrl(window=None):
+    if window is None:
+        with shared_data.ctrl_rlock:
+            window = shared_data.trade_window
+    if window is None:
+        print_context("没有找到同花顺期货通交易主窗口，程序功能中断！")
+        return
+    ctrl = window.descendants(control_type="Text", title="全平")
+    for k, item in enumerate(ctrl):
+        print(f"{k}: {item.window_text()} > {item.rectangle()}")
 
 if __name__ == '__main__':
     # auto_login()
@@ -689,5 +696,6 @@ if __name__ == '__main__':
     local_control()
     # set_loss_profit()
     # ths_pre_check_thread()
+    local_special_ctrl()
     pass
 

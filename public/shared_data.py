@@ -60,9 +60,9 @@ login_control = {}  # 登录期货通交易软件
 ths_common_control = {}  # 交易平台常用控件字典,此处为多进程管理模式，以便进程数据共享
 condition_control = {}  # 条件单窗口控件映射字典
 logger: logging.Logger | None = None  # 根据用户选择的日志器
-quote_list = {"m2701", "c2701"}  # 默认要从东方财富网获取开盘价等信息的期货品种
+quote_list = ["c2701", "m2701"]  # 默认要从东方财富网获取开盘价等信息的期货品种
 ts_code = ""  # 期货商品代码（如au2601)通过人工手动选择后作为本次交易主体品种
-default_tscode = "m2701"  # 当在无人进入期货交易时，自动选择该期货品种作为当日的交易品种
+default_tscode = "c2701"  # 当在无人进入期货交易时，自动选择该期货品种作为当日的交易品种
 # search_future_list = []  # 待搜索的期货商品代码列表
 open_price = {}  # 交易品种开盘价信息：trade.order()
 pre_profit = 80  # 手动设置固定止盈值
@@ -86,6 +86,8 @@ trade_menu_dict = {}  # 成交后的交易参数,在trade.py模块中产生
 ts_code_attribute_dict = {}  # 交易品种的基本属性
 BIN_NUM = 8  # 配置参数：箱体数量，日内短线推荐8个等宽箱体
 # 项目线程列表
+monitor_multi_position_thread_flag = False  # 监控锁仓线程标记
+monitor_thread_flag = False  # 通用监控线程标记
 thread_list: list[threading.Thread] = []
 total_balance = 0.0  # 账户总金额
 available_balance = 0.0  # 账户可用资金
@@ -93,6 +95,8 @@ available_balance = 0.0  # 账户可用资金
 night_trigger_done: dict[str, bool] = {}
 # 全局停止标记，所有交易线程都监听这个
 stop_flag: bool = False
+# 同花顺交易窗口持仓行交易状态即时数据字典
+position_data_dict = {}
 
 set_lots_flag = True  # 切换合约时修改手数标记
 trade_time_table = [(9, 0, 10, 15), (10, 30, 11, 30), (13, 30, 15, 0), (21, 0, 23, 0)]  # 交易时间表, 最后一个用测试。

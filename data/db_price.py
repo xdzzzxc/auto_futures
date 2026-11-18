@@ -12,7 +12,7 @@ import threading
 
 TABLE_MAX_ROWS = 100000
 # 全局数据库锁
-_db_lock = threading.Lock()
+_db_lock = threading.RLock()
 
 # 锁冲突重试装饰器
 def _retry_on_lock(max_retries=5, delay=0.3):
@@ -104,37 +104,6 @@ def trim_old_data(db_path: str):
                 cur.execute(del_sql, (del_num,))
                 conn.commit()
 
-# def write_price(price_list):
-#     if len(price_list) != 3:
-#         print_context.print_context("参数长度错误")
-#         return
-#
-#     record_time, price, ts_code = price_list
-#     record_time = str(record_time).strip()
-#     ts_code = str(ts_code).strip()
-#
-#     if not record_time or not ts_code:
-#         print_context.print_context("时间/合约码为空，跳过入库")
-#         return
-#
-#     try:
-#         price = float(str(price).strip())
-#     except (ValueError, TypeError):
-#         print_context.print_context("价格格式错误，跳过入库")
-#         return
-#
-#     db_path = get_db_path(ts_code)
-#     try:
-#         init_table(db_path)
-#         insert_sql = "INSERT OR IGNORE INTO price_data (record_time, price, ts_code) VALUES (?, ?, ?)"
-#         with _db_lock:
-#             with sqlite3.connect(db_path, timeout=10) as conn:
-#                 conn.execute(insert_sql, (record_time, price, ts_code))
-#         trim_old_data(db_path)
-#     except sqlite3.IntegrityError:
-#         print_context.print_context(f"主键 {record_time} {ts_code} 已存在，本次保存数据失败！")
-#     except Exception as e:
-#         print_context.print_context(f"入库异常：{e}")
 
 def batch_write_price(batch_list):
     # 先全局校验所有数据，过滤无效行

@@ -18,6 +18,7 @@ from ruamel.yaml import YAML, YAMLError
 from core.private import get_user_today_trade_stat
 import traceback
 from pathlib import Path
+import pprint
 
 yaml = YAML()
 yaml.preserve_quotes = True
@@ -351,6 +352,7 @@ def get_db_data(ts_code, k_minutes=None):
 
         # 判断是否满足数据条件
         if df is not None and not df.empty and len(df) >= 5:
+            print_context(f"读取到 [{ts_code}] 实时价格记录共 {len(df)} 条！")
             break
 
         current_len = len(df) if df is not None else 0
@@ -550,11 +552,12 @@ def get_market_ctx(ts_code=None):
     ui_read_code = None
     try:
         with shared_data.variables_rlock:
-            ths_tscode = shared_data.ths_common_control["期货代码"][0].window_text()
-            ths_tscode = ths_tscode.strip().lower()
-            if ths_tscode:
-                ui_read_code = ths_tscode
-
+            ctrl_list = shared_data.ths_common_control.get("期货代码", [])
+            if len(ctrl_list) > 0:
+                ths_tscode = ctrl_list[0].window_text()
+                ths_tscode = ths_tscode.strip().lower()
+                if ths_tscode:
+                    ui_read_code = ths_tscode
     except Exception as e:
         print_context(f"UI读取【期货代码】控件失败：{str(e)}")
 
@@ -563,7 +566,7 @@ def get_market_ctx(ts_code=None):
         actual_code = ui_read_code
         print_context(f"正在获取期货品种[{actual_code}]的交易参考数据 - 品种交易来源：同花顺交易即时窗口")
     else:
-        fallback_code = (ts_code if ts_code is not None else shared_data.ts_code)
+        fallback_code = (ts_code if ts_code is not None else shared_data.default_tscode)
         if fallback_code is None:
             raise RuntimeError("ts_code is None，无法解析交易品种")
         actual_code = fallback_code.strip().lower()
@@ -596,7 +599,9 @@ def get_market_ctx(ts_code=None):
     # db_data返回的是中文键，同样执行追加英文别名
     db_data = get_db_data(ts_code=actual_code)
     if db_data is None:
-        raise RuntimeError(f"获取数据库tick数据失败，actual_code={actual_code}，db_data为None（今日交易数据不足5条）")
+        print_context(f"⚠️ [{actual_code}] tick样本不足5条，跳过本轮策略判断")
+        return None  # 返回None给上层，上层判断if ctx is None就跳过条件计算，不抛异常
+        # raise RuntimeError(f"获取数据库tick数据失败，actual_code={actual_code}，db_data为None（今日交易数据不足5条）")
     # db_data_with_eng = rename_dict_keys(db_data, trans_map)
     # market_ctx.update(db_data_with_eng)
     market_ctx.update(db_data)
@@ -629,7 +634,12 @@ def get_market_ctx(ts_code=None):
     eval_ctx.update(market_ctx)
     shared_data.market_ctx_dict.update(eval_ctx)
     eval_ctx = rename_dict_keys(eval_ctx, trans_map)
-    # print_context(f"程序已获取 [{actual_code}] 期货品种的相关数据，等待条件匹配成立时下单！\n{eval_ctx}")
+
+    try:
+        ctx_dump = pprint.pformat(eval_ctx, depth=3, width=140, compact=False)
+        print_context(f"程序已获取 [{actual_code}] 期货品种的相关数据，等待条件匹配成立时下单！\n{ctx_dump}")
+    except Exception as e:
+        print_context(e)
     return eval_ctx
 
 
@@ -867,7 +877,7 @@ def select_best_trade_rule(ts_code: str, ctx=None):
         return {}, {}
     if ctx is None:
         ctx = get_market_ctx(ts_code)
-
+        # print_context(ctx)
     hit_rules, detail_map = scan_all_rules(config_pool, ctx)  # type: ignore[index]
 
     # ==========新增打印逻辑开始==========
@@ -910,8 +920,8 @@ def select_best_trade_rule(ts_code: str, ctx=None):
     # 提取止盈价止损价，方便外部直接读取
     trade_menu["profit_price"] = out.get("profit_price")
     trade_menu["loss_price"] = out.get("loss_price")
-
     shared_data.trade_menu_dict = trade_menu
+    # shared_data.trade_menu_dict.update(trade_menu)
     print_context(f"✅[{datetime.now().strftime('%H:%M:%S')}]-命中策略,合约交易参数信息设置>>>\n{shared_data.trade_menu_dict}")
     # ==============================================================================================
 
@@ -1192,12 +1202,22 @@ def order(ts_code=None):
 
 
 if __name__ == "__main__":
-    shared_data.ts_code = "c2701"
-    # reset_temp_params_in_yaml()
-    print(get_market_ctx())
-    # get_db_data(ts_code="m2611")
-    order(ts_code="m2611")
-    # reload_config_pool()  # 测试热加载
+    from core.connect_ths import local_control
 
-    # print(get_db_data(ts_code="m2611"))
-    # scan_all_rules()
+    shared_data.ts_code = "c2701"
+    get_market_ctx()
+    # local_control()
+    # select_best_trade_rule(ts_code='m2701')
+    # order()
+    exit()
+
+
+    # reset_temp_params_in_yaml()
+    try:
+        res = get_market_ctx()
+        print("get_market_ctx 返回：", res)
+    except Exception as e:
+        print("get_market_ctx 异常：", e)
+        import traceback
+
+        traceback.print_exc()

@@ -1,331 +1,705 @@
+# -*- coding: utf-8 -*-
+"""
+锁仓持仓行：全平控件 <-> 同行实时盈亏数值 一一对应定位模块
+业务背景（同花顺期货通 WPF 持仓面板）：
+- 持仓每一行是一个 DataRowView，行内包含：方向(多/空)、合约、手数、价格、盈亏数值、“全平”按钮等 TextBlock。
+- “逐笔浮盈”是表头文本，盈亏数值行位于该表头下方，与“全平”处于同一行（top 相同，可能 ±1 像素抖动）。
+- 同一行所有控件 hwnd 相同（外层容器），不能用 hwnd 区分行；行绑定依据：top 坐标对齐 + 共同祖先 DataRowView。
+
+返回约定：
+- 只要扫描到 >=1 个“全平”控件（1 个单持仓 / 2 个锁仓 / 3 个及以上多持仓），逐行绑定：
+    {
+        1: {"close_ctrl": 全平控件对象, "pnl": 盈亏值, "variety": "中文品种名", "direction": "多/空", "ts_code": "合约代码"},
+        2: { ... }
+    }
+- “全平”控件数量为 0（或窗口无效 / 扫描异常）：返回 None。
+- 每次扫描结果会同步快照到 shared_data.position_data_dict；无持仓时清空该字典。
+
+注意：pywinauto UIA 的 RECT 属性为 .left / .top / .right / .bottom（不是 .T/.L/.R/.B）。
+"""
+import re
 from time import sleep
+from core.connect_ths import local_control, is_win_valid, is_around
+from pywinauto.controls.uiawrapper import UIAWrapper
 from datetime import datetime, timedelta
-from pywinauto import mouse, ElementNotFoundError
-from backtrader import strategy
-import time
 from public import shared_data
-from public.anti_screensaver import kill_blacklist_process
 from public.print_context import print_context
 from sendmsg.pushplus import send_msg
-from public.shared_data import click_position, is_trade_status, trade_flag, get_data_cache_dir, click_control, set_lots
-from log.trade_log import setup_trade_loggers
-import os, json
-# 导入计数写入函数
 from core.private import append_close_record
-from core.connect_ths import set_loss_profit
+from core.trade import reset_temp_params_in_yaml
 from public.jiaoyisuo import get_future_info
+from core.monitor import get_today_trade_stat
 
 
-logger = setup_trade_loggers()
-#
-UI_DELAY_SHORT = 0.2
-MONITOR_INTERVAL = 0.5
-# NO_HOLD_PRINT_INTERVAL = 6000  # 无持仓每60秒打印一次，不刷屏
-TRADE_INTERVAL = shared_data.valid_trade_interval if shared_data.valid_trade_interval else 300
+_PNL_RAW_SYMBOLS = {",", "+", "-", ".", " "}
 
+# 品种代码 -> 中文映射，按需自行扩充
+CODE_TO_VARIETY = {
+    "m": "豆粕",
+    "c": "玉米",
+    "jd": "鸡蛋",
+    "fg": "玻璃",
+    "ma": "纯碱",
+    "rb": "螺纹钢",
+    "cu": "沪铜",
+    "au": "沪金",
+    "ag": "沪银"
+}
 
-# 新增：读取trade_log.json获取今日交易次数、累计盈亏
-def get_today_trade_stat():
-    log_path = os.path.join(get_data_cache_dir(), "trade_log","trade_log.json")
-    today_str = datetime.now().strftime("%Y%m%d")
-    real_count = 0
-    real_pnl = 0.0
-    sim_count = 0
-    sim_pnl = 0.0
-    # print_context(f"【DEBUG】日志完整路径：{log_path}")
-    # print_context(f"【DEBUG】今日日期字符串：{today_str}")
-    if os.path.exists(log_path):
-        # print_context("【DEBUG】文件存在，开始读取")
-        try:
-            with open(log_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            records = data.get("records", {})
-            # print_context(f"【DEBUG】读取到总记录条数：{len(records)}")
-            for time_key, rec in records.items():
-                rec_date = time_key[:8]
-                if rec_date == today_str:
-                    pnl_val = float(rec.get("pnl", 0.0))
-                    ut = int(rec.get("user_type", 0))
-                    if ut == 0:
-                        sim_count += 1
-                        sim_pnl += pnl_val
-                    elif ut == 1:
-                        real_count += 1
-                        real_pnl += pnl_val
-            #         print_context(f"【DEBUG】匹配今日记录：{time_key}, user_type={ut}, pnl={pnl_val}")
-            # print_context(f"【DEBUG】实盘：count={real_count}, pnl={real_pnl:.2f} | 模拟：count={sim_count}, pnl={sim_pnl:.2f}")
-        except Exception as e:
-            print_context(f"读取交易日志统计失败:{str(e)}")
-    else:
-        print_context(f"【DEBUG】文件不存在！")
-    return {"sim_user": [sim_count, sim_pnl], "real_user": [real_count, real_pnl]}
+def _is_pnl_text(txt: str) -> bool:
+    """判断文本是否像一个盈亏数值（含 +30 / -15 / 30.5 / -- 等占位）。"""
+    if txt is None:
+        return False
+    t = txt.strip()
+    if not t:
+        return False
+    if t in ("--", "-", "—", "暂无"):
+        return True
+    cleaned = "".join(ch for ch in t if ch not in _PNL_RAW_SYMBOLS)
+    return cleaned.isdigit()
 
-
-def auto_trade(trade_dir=None):
-    """负责点击买多或卖空进行期货品种下单，等待成交确认"""
-    if trade_dir is None:
-        print_context("没有明确的交易方向！")
+def _parse_pnl(txt: str):
+    """盈亏文本 -> float；解析失败返回原始字符串。"""
+    if txt is None:
         return None
-    shared_data.trade_window.maximize()
-    shared_data.trade_window.set_focus()
-    controls = shared_data.ths_common_control
-    sleep(0.5)
-    current_time = datetime.now()
-    click_ok = False
-    # 买多 / 卖空
-    if trade_dir == "rise":
-        try:
-            click_position(controls["买多"][1])
-            click_ok = True
-        except Exception as e:
-            print_context(f"买多坐标点击失败，尝试文本查找方式：{str(e)}")
-        if not click_ok:
-            click_control(text="买多", control_type="Text", click_btn=0)
-    else:
-        try:
-            click_position(controls["卖空"][1])
-            click_ok = True
-        except Exception as e:
-            print_context(f"卖空坐标点击失败，尝试文本查找方式：{str(e)}")
-        if not click_ok:
-            click_control(text="卖空", control_type="Text", click_btn=0)
-    cur_price = float(controls["即时价格"][0].window_text().strip())
-    print_context(f"[{current_time.strftime('%H:%M:%S')}]程序已发送交易请求，正在等待市场撮合中......")
-
-    # ========== 等待成交确认（只检测，不设置云单） ==========
-    max_wait_sec = 30
-    poll_interval = 0.5
-    start_ts = time.time()
-    filled = False
-    while time.time() - start_ts < max_wait_sec:
-        sleep(poll_interval)
-        status_ok = is_trade_status()
-        if status_ok:
-            filled = True
-            break
-
-    if filled:
-        print_context(f"✅[{datetime.now().strftime('%H:%M:%S')}]开仓成交确认，持仓已出现!")
-        print_context(f"今日交易明细 - {get_today_trade_stat()}")
-        with shared_data.variables_rlock:
-            shared_data.valid_time = None
-        # ===== 关键：注释掉这里提前调用set_loss_profit() =====
-        # 原因：此时order线程还在auto_trade内部，loss_profit_param还没写入有效值，
-        # 提前调用会导致todo_list为空，白跑一趟。云单设置统一交给order线程末尾执行。
-        # set_loss_profit()
-    else:
-        print_context(f"❌[{datetime.now().strftime('%H:%M:%S')}]开仓等待{max_wait_sec}秒未检测到持仓，请检查委托是否成交")
-    return cur_price
-
-
-def monitor_profit_loss():
-    from core.trade import reset_temp_params_in_yaml
-    # ========== 启动监控时一次性读取平仓控件坐标 ==========
+    t = txt.strip().replace(",", "")
     try:
-        close_ctrl_position = shared_data.ths_common_control['平仓'][1]
+        return float(t)
+    except (ValueError, TypeError):
+        return txt.strip()
+
+def _iter_text_controls(window):
+    """递归遍历窗口内所有 Text 控件（descendants 不支持 title 过滤，文本需自行判断）。"""
+    try:
+        return window.descendants(control_type="Text")
     except Exception as e:
-        print_context(f"monitor_profit_loss 获取平仓控件失败:{str(e)}")
-        return
+        print_context(f"[lock_position_profit] 遍历 Text 控件异常：{repr(e)}")
+        return []
 
-    # ============== 自动平仓执行函数，签名不变 ==============
-    def _trade(msg, ts_code_arg: str, profit_arg: float,
-               strategy_id: str, trade_period: str,
-               original_pre_profit=None, original_pre_loss=None,
-               ):
+def _find_row_container(ctrl):
+    """
+    向上查找所属的 DataRowView 行容器（inspect 祖先："System.Data.DataRowView" 列表项目）。
+    找不到返回 None。UIA-to-MSAA bridge 下祖先文本可能不稳定，仅作兜底辅助。
+    """
+    try:
+        for anc in ctrl.ancestors():
+            anc_name = ""
+            try:
+                anc_name = anc.window_text() or ""
+            except Exception:
+                anc_name = ""
+            if "DataRowView" in anc_name:
+                return anc
+    except Exception:
+        pass
+    return None
+
+def _match_profit_in_row(close_ctrl, close_rect, text_ctrls, header_left):
+    """
+    在“全平”所在行内匹配盈亏数值控件。
+    匹配优先级：
+    1. 同一行（top 与全平 top 误差 <=1）；
+    2. 文本为可解析盈亏数值，排除“全平”“多”“空”等方向/按钮文本；
+    3. 水平方向优先对齐“逐笔浮盈”表头列（left 与 header_left 距离最近）；
+       表头未定位到时，取该行最靠右的数值控件兜底。
+    返回 (profit_ctrl, profit_text)；未匹配到返回 (None, None)。
+    """
+    target_top = close_rect.top
+    candidates = []
+
+    for c in text_ctrls:
         try:
+            if c is close_ctrl:
+                continue
+            r = c.rectangle()
+        except Exception:
+            continue
+
+        # 同行判定：top 容差 1 像素
+        if abs(r.top - target_top) > 1:
+            continue
+
+        txt = (c.window_text() or "").strip()
+        if txt in ("全平", "多", "空", "买多", "卖空"):
+            continue
+        if not _is_pnl_text(txt):
+            continue
+
+        # 与表头列的水平距离；表头缺失时用 right 越大越靠右兜底
+        col_dist = abs(r.left - header_left) if header_left is not None else -r.right
+        candidates.append((col_dist, r.right, c, txt))
+
+    if not candidates:
+        # 兜底：通过共同祖先 DataRowView 在该行容器内再找一次数值控件
+        row_container = _find_row_container(close_ctrl)
+        if row_container is not None:
+            try:
+                for c in row_container.descendants(control_type="Text"):
+                    txt = (c.window_text() or "").strip()
+                    if txt in ("全平", "多", "空", "买多", "卖空"):
+                        continue
+                    if _is_pnl_text(txt):
+                        r = c.rectangle()
+                        col_dist = abs(r.left - header_left) if header_left is not None else -r.right
+                        candidates.append((col_dist, r.right, c, txt))
+            except Exception:
+                pass
+
+    if not candidates:
+        return None, None
+    candidates.sort(key=lambda x: (x[0], -x[1]))
+    _, _, profit_ctrl, profit_text = candidates[0]
+    return profit_ctrl, profit_text
+
+def _match_text_in_row(close_ctrl, close_rect, text_ctrls, header_left):
+    """
+    【通用同行文本匹配】专门给品种、多空使用，不做数值过滤！
+    同行判定：top 容差 <=1；优先按表头left就近匹配
+    header_left=None 直接返回 None，禁止乱抓
+    返回 (ctrl, text)
+    """
+    if header_left is None:
+        return None, None
+    target_top = close_rect.top
+    candidates = []
+    for c in text_ctrls:
+        try:
+            if c is close_ctrl:
+                continue
+            r = c.rectangle()
+        except Exception:
+            continue
+        if abs(r.top - target_top) > 1:
+            continue
+        txt = (c.window_text() or "").strip()
+        if not txt:
+            continue
+        dist = abs(r.left - header_left)
+        candidates.append((dist, c, txt))
+    if not candidates:
+        # 容器兜底
+        row_container = _find_row_container(close_ctrl)
+        if row_container is not None:
+            try:
+                for c in row_container.descendants(control_type="Text"):
+                    txt = (c.window_text() or "").strip()
+                    if not txt:
+                        continue
+                    r = c.rectangle()
+                    dist = abs(r.left - header_left)
+                    candidates.append((dist, c, txt))
+            except Exception:
+                pass
+    if not candidates:
+        return None, None
+    candidates.sort(key=lambda x: x[0])
+    _, ctrl, txt = candidates[0]
+    return ctrl, txt
+
+def _collect_row_all_text(close_ctrl, close_rect, text_ctrls):
+    """收集该行全部文本，用于兜底正则解析（适配 玉米2701  1手多仓 -60 这种合并文本）"""
+    target_top = close_rect.top
+    buf = []
+    for c in text_ctrls:
+        try:
+            r = c.rectangle()
+        except Exception:
+            continue
+        if abs(r.top - target_top) > 1:
+            continue
+        t = (c.window_text() or "").strip()
+        if t:
+            buf.append(t)
+    return " ".join(buf)
+
+def _normalize_direction(raw_txt: str):
+    """归一化为 多 / 空，识别：买、多仓、卖、空仓"""
+    if not raw_txt:
+        return None
+    s = raw_txt.lower()
+    if any(k in s for k in ["多", "买"]):
+        return "多"
+    if any(k in s for k in ["空", "卖"]):
+        return "空"
+    return None
+
+def _parse_variety_from_text(raw: str):
+    """从整行文本提取中文品种名；取不到则用代码映射"""
+    if not raw:
+        return None
+    # 优先提取中文
+    chinese_list = re.findall(r"[\u4e00-\u9fa5]+", raw)
+    if chinese_list:
+        # 过滤掉 多仓、空仓、手 这类词
+        ban_list = {"多仓", "空仓", "手", "仓"}
+        for item in chinese_list:
+            if item not in ban_list:
+                return item
+    # 提取合约前缀，匹配品种字典
+    m = re.search(r"^([a-zA-Z]+)\d+", raw.replace(" ", ""))
+    if m:
+        code = m.group(1).lower()
+        if code in CODE_TO_VARIETY:
+            return CODE_TO_VARIETY[code]
+    return None
+
+def _parse_ts_code_from_text(raw: str):
+    """从整行文本提取完整合约代码（如 m2701 / c2701）；取不到返回 None。"""
+    if not raw:
+        return None
+    m = re.search(r"([a-zA-Z]+\d{3,4})", raw.replace(" ", ""))
+    if m:
+        return m.group(1).lower()
+    return None
+
+def match_close_and_profit(window=None):
+    """
+    主入口：定位两个“全平”持仓行，并逐一绑定同行：盈亏、品种(中文)、多空
+    :param window: 可选，传入交易主窗口；为空则取 shared_data.trade_window
+    :return:
+        {
+            1: {
+                "close_ctrl": 全平控件对象,
+                "pnl": 盈亏数值,
+                "variety": "玉米 / 豆粕 中文品种名",
+                "direction": "多 / 空"
+            },
+            2: { ... }
+        }
+        全平数量不为 2 / 窗口无效 / 扫描异常时返回 None。
+    """
+    # 1. 取窗口（加锁，避免与其他线程并发读写 trade_window）
+    from public import shared_data
+    if window is None:
+        if shared_data is not None and hasattr(shared_data, "trade_window"):
+            try:
+                with shared_data.ctrl_rlock:
+                    window = shared_data.trade_window
+            except Exception:
+                window = shared_data.trade_window
+        else:
+            window = None
+
+    if window is None or not is_win_valid(window):
+        print_context("[lock_position_profit] 交易主窗口无效，无法定位全平/盈亏控件，返回 None")
+        return None
+
+    try:
+        text_ctrls = _iter_text_controls(window)
+
+        if not text_ctrls:
+            print_context("[lock_position_profit] 未扫描到任何 Text 控件，返回 None")
+            return None
+
+        # 表头别名池，自动匹配，不用反复改
+        header_alias = {
+            "pnl": ["逐笔浮盈"],
+            "variety": ["品种", "合约名称", "名称"],
+            "direction": ["多空", "买卖", "方向"]
+        }
+        header_map = {"pnl": None, "variety": None, "direction": None}
+        debug_header_list = []
+
+        for c in text_ctrls:
+            try:
+                txt = (c.window_text() or "").strip()
+                rect = c.rectangle()
+                debug_header_list.append(txt)
+                if txt in header_alias["pnl"]:
+                    header_map["pnl"] = rect.left
+                elif txt in header_alias["variety"]:
+                    header_map["variety"] = rect.left
+                elif txt in header_alias["direction"]:
+                    header_map["direction"] = rect.left
+            except Exception:
+                continue
+
+        # print_context(f"[lock_position_profit] 【调试】面板全部静态文本：{debug_header_list}")
+        # print_context(f"[lock_position_profit] 表头基准left：{header_map}")
+
+        # 收集所有“全平”控件，按 top 从小到大排序（上面一行 = 1，下面一行 = 2）
+        close_list = []
+        for c in text_ctrls:
+            try:
+                txt = (c.window_text() or "").strip()
+                if txt != "全平":
+                    continue
+                rect = c.rectangle()
+                close_list.append((rect.top, c, rect))
+            except Exception:
+                continue
+        close_list.sort(key=lambda x: x[0])
+
+        # 数量校验：只要扫描到“全平”控件即视为有持仓，1 个 / 2 个 / 多个均逐行绑定；
+        # 仅当 0 个时判定无持仓，清空持仓快照并返回 None。
+        if len(close_list) == 0:
+            with shared_data.dict_rlock:
+                shared_data.position_data_dict.clear()
+            print_context("[lock_position_profit] 未定位到“全平”控件，当前无持仓，返回 None")
+            return None
+
+        result = {}
+        for idx, (_, close_ctrl, close_rect) in enumerate(close_list, start=1):
+            # 逐笔浮盈（沿用原有盈亏匹配函数）
+            if header_map["pnl"] is not None:
+                _, profit_text = _match_profit_in_row(close_ctrl, close_rect, text_ctrls, header_map["pnl"])
+            else:
+                profit_text = None
+            pnl_value = _parse_pnl(profit_text) if profit_text is not None else None
+
+            # 品种：优先列匹配，失败走整行兜底解析
+            _, variety_text = _match_text_in_row(close_ctrl, close_rect, text_ctrls, header_map["variety"])
+            row_all_text = _collect_row_all_text(close_ctrl, close_rect, text_ctrls)
+            if not variety_text:
+                variety_text = _parse_variety_from_text(row_all_text)
+
+            # 多空：优先列匹配，失败走整行兜底解析
+            _, dir_raw = _match_text_in_row(close_ctrl, close_rect, text_ctrls, header_map["direction"])
+            direction_text = _normalize_direction(dir_raw)
+            if not direction_text:
+                direction_text = _normalize_direction(row_all_text)
+
+            # 合约代码：优先整行文本提取，取不到兜底全局当前代码
+            ts_code_text = _parse_ts_code_from_text(row_all_text) or shared_data.ts_code or ""
+
+            row_data = {
+                "close_ctrl": close_ctrl,
+                "pnl": pnl_value,
+                "variety": variety_text,
+                "direction": direction_text,
+                "ts_code": ts_code_text
+            }
+            result[idx] = row_data
+            print_context(
+                f"[lock_position_profit] 第 {idx} 行：全平 top={close_rect.top} "
+                f"整行=[{row_all_text}] 盈亏={profit_text}({pnl_value}) | 品种={variety_text} | 代码={ts_code_text} | 多空={direction_text}"
+            )
+
+        # 同步持仓行快照到全局 position_data_dict（加锁，供其他线程读取）
+        snapshot = {
+            k: {
+                "close_ctrl": v["close_ctrl"],
+                "pnl": v["pnl"],
+                "variety": v["variety"],
+                "direction": v["direction"],
+                "ts_code": v.get("ts_code")
+            }
+            for k, v in result.items()
+        }
+        with shared_data.dict_rlock:
+            shared_data.position_data_dict.clear()
+            shared_data.position_data_dict.update(snapshot)
+
+        return result
+
+    except Exception as e:
+        print_context(f"[lock_position_profit] 定位全平/盈亏异常：{repr(e)}")
+        return None
+
+def is_lock_position():
+    """
+    锁仓状态轮询线程函数
+    循环检测持仓面板是否同时存在【手多仓】、【手空仓】文本
+    - 同时存在 → 锁仓：开启锁仓监控线程，关闭普通监控
+    - 不同时存在 → 非锁仓：开启普通监控线程，关闭锁仓监控
+    循环间隔 1s，依赖 shared_data 两个flag控制线程启停
+    """
+    from public import shared_data
+    print_context("[is_lock_position] 锁仓状态轮询线程已启动")
+    print_flag = True
+    while True:
+        try:
+            # 窗口读取加锁
             with shared_data.ctrl_rlock:
-                shared_data.trade_window.maximize()
-                shared_data.trade_window.set_focus()
-                sleep(0.5)
-                result = click_position(close_ctrl_position)
-            # 取本次平仓对应的手数
-            lots = shared_data.tscode_lots_dict.get(ts_code_arg, 1)
-            # 读取品种费率，计算双边手续费（和order里口径保持一致）
-            fut_info = get_future_info(ts_code_arg, 0)
-            per_lot_two_way_fee = fut_info.get('fee', 0) * 2
-            total_fee = per_lot_two_way_fee * lots
-            net_profit = profit_arg - total_fee  # 纯利润 = 界面毛盈亏 - 双边手续费
+                window = shared_data.trade_window
+            if window is None or not is_win_valid(window):
+                sleep(1)
+                continue
+            with shared_data.ctrl_rlock:
+                text_ctrls = shared_data.ths_common_control["盈亏"][0].window_text().strip()
+                # print(f"\r读取到的盈亏控件文本：{text_ctrls}", flush=True, end="")
+            has_duo = False
+            has_kong = False
+            try:
+                if "手多仓" in text_ctrls:
+                    has_duo = True
+                if "手空仓" in text_ctrls:
+                    has_kong = True
+            except Exception:
+                continue
 
-            if result:
-                print_context("_trade: 程序已根据止损止盈设置值完成自动平仓！")
-                with shared_data.variables_rlock:
-                    shared_data.valid_time = datetime.now() + timedelta(minutes=shared_data.valid_trade_interval)
-                    print_context(f"【平仓点击成功，设置冷却】下次交易有效时间起点：{shared_data.valid_time}")
+            # 判定锁仓：两个文本同时出现
+            if has_duo and has_kong:
+                # 锁仓状态：启动锁仓监控，关闭普通监控
+                with shared_data.ctrl_rlock:
+                    if print_flag:
+                        print_context("[is_lock_position] 检测到锁仓，切换至锁仓监控线程")
+                        print_flag = False
+                    shared_data.monitor_thread_flag = False
+                    shared_data.monitor_lock_position_thread_flag = True
+            else:
+                # 【修复之前bug】非锁仓：开启普通监控，关闭锁仓监控
+                with shared_data.ctrl_rlock:
+                    if print_flag:
+                        print_context("[is_lock_position] 未检测到锁仓，切换至普通监控线程")
+                        print_flag = False
+                    shared_data.monitor_thread_flag = True
+                    shared_data.monitor_lock_position_thread_flag = False
 
-                # 仅平仓点击成功才写入记录、统计、推送成功消息、重置参数
+        except Exception as e:
+            print_context(f"[is_lock_position] 轮询异常：{repr(e)}")
+        sleep(1)
+
+
+def monitor_lock_position_profit_loss():
+    """
+    锁仓状态的监控操作
+    常驻线程，flag=False时空转；flag=True读取两行持仓，本行独立全平控件平仓
+    本轮完整扫描所有持仓行，收集命中候选，最多平一行，避免后行饿死
+    锁仓平仓不设置冷却、不重置YAML临时参数
+    """
+    print_flag = True
+    print_context("LockMonitorThread 锁仓盈亏监控线程已启动")
+    while True:
+        try:
+            # 非锁仓状态：空转
+            if not shared_data.monitor_lock_position_thread_flag:
+                if print_flag:
+                    print_context(f"现在是非锁仓状态 - 【{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}】")
+                    print_flag = False
+                sleep(1)
+                continue
+            print_flag = True
+
+            # 开市校验
+            if not shared_data.trade_flag():
+                print(f"\r锁仓监控：未开市，等待开市 [{datetime.now().strftime('%H:%M:%S')}]", flush=True, end="")
+                sleep(1)
+                continue
+
+            # 读取止盈止损阈值
+            with shared_data.variables_rlock:
+                pre_profit = shared_data.pre_profit
+                pre_loss = shared_data.pre_loss
+
+            ths_win_data = match_close_and_profit()
+            if ths_win_data is None:
+                sleep(1)
+                continue
+
+            # 第一步：完整遍历全部行，收集命中候选，不提前break
+            candidate_list = []
+            for idx, row in ths_win_data.items():
+                try:
+                    pnl = float(row["pnl"])
+                    close_ctrl = row["close_ctrl"]
+                    variety = row["variety"]
+                    direction = row["direction"]
+                    lots = shared_data.tscode_lots_dict.get(variety, 1)
+                    strategy_id = shared_data.trade_menu_dict.get("rule_id", "unknow")
+                    trade_period = shared_data.trade_menu_dict.get("trade_period", "")
+                    total_pre_profit = pre_profit * lots
+                    total_pre_loss = pre_loss * lots
+
+                    close_reason = ""
+                    hit = False
+                    # 止盈触发
+                    if pre_profit > 0 and pnl >= total_pre_profit - 0.02:
+                        close_reason = f"【锁仓行{idx}-{direction}】止盈平仓，单手目标{pre_profit:.2f}，{lots}手合计目标{total_pre_profit:.2f}\n当前浮动盈利：{pnl:.2f}元"
+                        hit = True
+                    # 止损触发
+                    elif pre_loss < 0 and pnl <= total_pre_loss + 0.02:
+                        close_reason = f"【锁仓行{idx}-{direction}】止损平仓，单手目标{pre_loss:.2f}，{lots}手合计目标{total_pre_loss:.2f}\n当前浮动亏损：{pnl:.2f}元"
+                        hit = True
+
+                    if hit:
+                        candidate_list.append({
+                            "idx": idx,
+                            "row": row,
+                            "close_reason": close_reason,
+                            "pnl": pnl,
+                            "variety": variety,
+                            "direction": direction,
+                            "lots": lots,
+                            "strategy_id": strategy_id,
+                            "trade_period": trade_period
+                        })
+                except Exception as row_err:
+                    print_context(f"锁仓单行读取异常，跳过该行：{str(row_err)}")
+                    continue
+
+            # 第二步：本轮只处理第一个命中的候选，最多平一行
+            if candidate_list:
+                first_hit = candidate_list[0]
+                row = first_hit["row"]
+                close_ctrl = row["close_ctrl"]
+                variety = first_hit["variety"]
+                pnl = first_hit["pnl"]
+                close_reason = first_hit["close_reason"]
+                lots = first_hit["lots"]
+                strategy_id = first_hit["strategy_id"]
+                trade_period = first_hit["trade_period"]
+
+                # UI操作加锁
+                with shared_data.ctrl_rlock:
+                    close_ctrl.click_input()
+                print_context(f"锁仓监控触发平仓：{close_reason}")
+
+                # 手续费、统计、推送
+                fut_info = get_future_info(variety, 0)
+                per_lot_two_way_fee = fut_info.get('fee', 0) * 2
+                total_fee = per_lot_two_way_fee * lots
+                net_profit = pnl - total_fee
                 ut = getattr(shared_data, "user_type", 0)
-                append_close_record(user_type=ut, pnl=profit_arg, ts_code=ts_code_arg,
-                                    strategy_id=strategy_id, trade_period=trade_period)
+                append_close_record(user_type=ut, pnl=pnl, ts_code=variety, strategy_id=strategy_id, trade_period=trade_period)
                 stat = get_today_trade_stat()
                 sim_cnt, sim_pnl = stat["sim_user"]
                 real_cnt, real_pnl = stat["real_user"]
                 full_msg = (
-                    f"{msg}\n"
+                    f"{close_reason}\n"
                     f"本次平仓手数：{lots}手\n"
-                    f"市值盈亏（涨跌差价）：{profit_arg:.2f}元\n"
+                    f"市值盈亏（涨跌差价）：{pnl:.2f}元\n"
                     f"本次双边手续费：{total_fee:.2f}元\n"
                     f"✅纯利润：{net_profit:.2f}元\n"
                     f"------------ 今日平仓汇总 ------------\n"
                     f"【模拟账户】平仓次数：{sim_cnt}，累计毛盈亏：{sim_pnl:.2f}元\n"
                     f"【实盘账户】平仓次数：{real_cnt}，累计毛盈亏：{real_pnl:.2f}元"
                 )
-                send_msg(f"自动平仓成功 - 品种：{ts_code_arg}\n{full_msg}")
-                print_context(f"自动平仓 [{datetime.now().strftime('%H:%M:%S')}]")
-                reset_temp_params_in_yaml()
-            else:
-                print_context("_trade: 平仓按钮点击返回False")
-                # 平仓点击失败：推送失败告警，不写成交记录、不设置冷却、不重置yaml
-                fail_msg = f"【平仓失败告警】品种：{ts_code_arg}，触发条件：{msg}"
-                send_msg(fail_msg)
+                send_msg(f"【锁仓监控】自动平仓成功 - 品种：{variety}\n{full_msg}")
 
-        except Exception as e:
-            send_msg(f"平仓异常错误：{str(e)}")
-            print_context(f"平仓失败：{str(e)}")
-            # 平仓异常，回滚止盈止损阈值
-            with shared_data.dict_rlock:
-                if original_pre_profit is not None:
-                    shared_data.pre_profit = original_pre_profit
-                if original_pre_loss is not None:
-                    shared_data.pre_loss = original_pre_loss
-
-    print_context("MonitorThread 盈亏监控线程已启动，永久常驻运行")
-    flag_wait_market_print = True
-    flag_no_position_print = True
-
-    while True:
-        try:
-            # 判断是否是在交易时段内，否则跳过循环，仅首次打印
-            if not trade_flag():
-                if flag_wait_market_print:
-                    print_context(
-                        f"[{datetime.now().strftime('%H:%M:%S')}] 请等待期市开市！- 日市：9:00:00 | 夜市：21:00:00")
-                    flag_wait_market_print = False
-                    # 切回未开市时，无持仓标记重置，防止下次开市上来就不打印
-                    flag_no_position_print = True
-                sleep(1)
-                continue
-
-            # 已经开市，重置开市等待标记（离开未开市，下次再休市可以重新打印）
-            flag_wait_market_print = True
-
-            # 判断是否存在持仓
-            if not is_trade_status():
-                if flag_no_position_print:
-                    print_context(f">>> [{datetime.now().strftime('%H:%M:%S')}] 无期货交易中，等待开仓！")
-                    flag_no_position_print = False
-                sleep(1)
-                continue
-
-            # 有持仓：重置无持仓标记，平仓回来可以再次打印
-            flag_no_position_print = True
-
-            # 读取配置参数
-            with shared_data.dict_rlock:
-                pre_profit = shared_data.pre_profit
-                original_pre_profit = pre_profit
-                pre_loss = shared_data.pre_loss
-                original_pre_loss = pre_loss
-                ts_code = shared_data.trade_menu_dict.get("ts_code", shared_data.ts_code)
-
-            profit = 0.0
-            direction_from_text = None
-            try:
-                with shared_data.ctrl_rlock:
-                    profit_loss_ctrl = shared_data.ths_common_control['盈亏'][0]
-                    # 先判断控件可见，规避重绘瞬间控件隐形
-                    if not profit_loss_ctrl.is_visible():
-                        raise ElementNotFoundError("盈亏控件当前不可见")
-                    profit_text = profit_loss_ctrl.window_text().strip()
-                if not profit_text:
-                    raise ValueError("盈亏文本为空")
-
-                # 解析浮动盈亏数值，兼容多种同花顺格式：+123.45 / -45.6 / --
-                parts = profit_text.split()
-                num_str = None
-                for p in reversed(parts):
-                    if p in ("--", "—", "***"):
-                        num_str = None
-                        break
-                    try:
-                        float(p)
-                        num_str = p
-                        break
-                    except ValueError:
-                        continue
-                if num_str is None:
-                    raise ValueError(f"盈亏文本无有效数字: {profit_text}")
-                profit = float(num_str)
-
-                # 识别多空，只在文本包含标记时更新
-                if "手多仓" in profit_text:
-                    direction_from_text = "rise"
-                elif "手空仓" in profit_text:
-                    direction_from_text = "fall"
-                if direction_from_text is not None:
-                    shared_data.direction = direction_from_text
-
-                _hold_v = getattr(shared_data, "hold_value", None)
-                ts_code = shared_data.trade_menu_dict.get("ts_code", shared_data.ts_code)
-
-                print(
-                    f"\r【监控信息[{datetime.now().strftime('%H:%M:%S')}]】 >>> 交易时间：{shared_data.trade_menu_dict['trade_time']} 品种代码：{ts_code} "
-                    f"交易手数：{shared_data.tscode_lots_dict.get(ts_code)}手 策略编号："
-                    f"{shared_data.trade_menu_dict.get('rule_id', 'unknow')} "
-                    f"多空：{shared_data.direction} 止盈阈值={pre_profit} 止损阈值={pre_loss} "
-                    f"云保本单（差值）={_hold_v} 止盈价：{shared_data.trade_menu_dict.get('profit_price')} 止损价：{shared_data.trade_menu_dict['loss_price']}"
-                    f"浮动盈亏={profit:.2f}\033[K", flush=True, end="")
-            except ElementNotFoundError:
-                print(
-                    f"\r读取盈亏控件异常（控件不可见），等待重试 - [{datetime.now().strftime('%H:%M:%S')}] \033[K",
-                    flush=True, end="")
-                continue
-            except ValueError as ve:
-                print(
-                    f"\r读取盈亏控件异常（文本解析失败:{str(ve)}），等待重试 - [{datetime.now().strftime('%H:%M:%S')}] \033[K",
-                    flush=True, end="")
-                continue
-            except Exception as e:
-                print(
-                    f"\r读取盈亏控件异常，等待重试 - [{datetime.now().strftime('%H:%M:%S')}] \033[K",
-                    flush=True, end="")
-                continue
-
-            # ========== 止盈止损判断（增加手数放大，pre_profit/pre_loss保留单手原值） ==========
-            strategy_id = shared_data.trade_menu_dict.get("rule_id", "unknow")
-            trade_period = shared_data.trade_menu_dict.get("trade_period", "")
-            lots = shared_data.tscode_lots_dict.get(ts_code, 1)
-            total_pre_profit = pre_profit * lots
-            total_pre_loss = pre_loss * lots
-
-            if pre_profit > 0 and profit >= total_pre_profit - 0.02:
-                close_reason = f"[{ts_code}]止盈平仓，单手目标{pre_profit:.2f}，{lots}手合计目标{total_pre_profit:.2f}\n当前浮动盈利：{profit:.2f}元(固定金额止盈)"
-                with shared_data.dict_rlock:
-                    shared_data.pre_profit = 0
-                    shared_data.pre_loss = 0
-                _trade(msg=close_reason, ts_code_arg=ts_code, profit_arg=profit,
-                       original_pre_profit=original_pre_profit, original_pre_loss=original_pre_loss,
-                       strategy_id=strategy_id, trade_period=trade_period)
-                print("量化程序已触发止盈平仓！")
-
-            elif pre_loss < 0 and profit <= total_pre_loss + 0.02:
-                close_reason = f"[{ts_code}]止损平仓，单手目标{pre_loss:.2f}，{lots}手合计目标{total_pre_loss:.2f}\n当前浮动亏损：{profit:.2f}元(固定金额止损)"
-                with shared_data.dict_rlock:
-                    shared_data.pre_profit = 0
-                    shared_data.pre_loss = 0
-                _trade(msg=close_reason, ts_code_arg=ts_code, profit_arg=profit,
-                       original_pre_profit=original_pre_profit, original_pre_loss=original_pre_loss,
-                       strategy_id=strategy_id, trade_period=trade_period)
-                print("量化程序已触发止损平仓！")
-
-
-            sleep(MONITOR_INTERVAL)
-        except Exception as e:
-            # 顶层兜底捕获，防止监控线程直接挂掉
-            print_context(f"【monitor顶层捕获】监控循环异常：{str(e)}")
-            send_msg(f"盈亏监控线程异常告警：{str(e)}")
+            sleep(1)
+        except Exception as top_err:
+            err_msg = f"【锁仓监控顶层异常】{str(top_err)}"
+            print_context(err_msg)
+            send_msg(err_msg)
             sleep(1)
             continue
 
 
-if __name__ == '__main__':
-    print(get_today_trade_stat())
+def close_single_position(window=None) -> bool:
+    """
+    单持仓平仓函数（非锁仓场景）：
+    - 调用 match_close_and_profit 扫描持仓行；
+    - 仅当持仓记录恰好 1 条时，按 shared_data.pre_profit / pre_loss 判断止盈止损；
+    - 命中则点击该行“全平”控件平仓，随后计算手续费、写入平仓记录、汇总统计并推送消息；
+    - 多条持仓（锁仓 / 多持仓）交由 monitor_lock_position_profit_loss 处理，本函数不平。
+
+    :param window: 可选交易主窗口，为空取 shared_data.trade_window
+    :return: True=已触发平仓；False=无持仓 / 非单条 / 未命中 / 平仓失败
+    """
+    ths_win_data = match_close_and_profit(window)
+    if not ths_win_data:
+        return False
+
+    # 仅处理单条持仓；多条交锁仓监控
+    if len(ths_win_data) != 1:
+        return False
+
+    row = next(iter(ths_win_data.values()))
+    close_ctrl = row.get("close_ctrl")
+    pnl_raw = row.get("pnl")
+    variety = row.get("variety")
+    direction = row.get("direction")
+    ts_code = (row.get("ts_code")
+               or shared_data.trade_menu_dict.get("ts_code")
+               or shared_data.trade_menu_dict.get("产品代码")
+               or shared_data.ts_code or "")
+
+    if close_ctrl is None or pnl_raw is None:
+        print_context("[close_single_position] 单条持仓缺少平仓控件或盈亏值，跳过")
+        return False
+
+    try:
+        pnl = float(pnl_raw)
+    except (ValueError, TypeError):
+        print_context(f"[close_single_position] 盈亏值无法解析：{pnl_raw}，跳过")
+        return False
+
+    # 读取止盈止损阈值
+    with shared_data.variables_rlock:
+        pre_profit = shared_data.pre_profit
+        pre_loss = shared_data.pre_loss
+
+    # 手数：优先按合约代码查，兜底品种名，最后默认 1 手
+    lots = shared_data.tscode_lots_dict.get(ts_code)
+    if lots is None:
+        lots = shared_data.tscode_lots_dict.get(variety, 1)
+    lots = lots or 1
+
+    strategy_id = shared_data.trade_menu_dict.get("rule_id", "unknow")
+    trade_period = shared_data.trade_menu_dict.get("trade_period", "")
+    total_pre_profit = pre_profit * lots
+    total_pre_loss = pre_loss * lots
+
+    close_reason = ""
+    hit = False
+    # 止盈触发
+    if pre_profit > 0 and pnl >= total_pre_profit - 0.02:
+        close_reason = (f"【单持仓-{direction}】止盈平仓，单手目标{pre_profit:.2f}，"
+                        f"{lots}手合计目标{total_pre_profit:.2f}\n当前浮动盈利：{pnl:.2f}元")
+        hit = True
+    # 止损触发
+    elif pre_loss < 0 and pnl <= total_pre_loss + 0.02:
+        close_reason = (f"【单持仓-{direction}】止损平仓，单手目标{pre_loss:.2f}，"
+                        f"{lots}手合计目标{total_pre_loss:.2f}\n当前浮动亏损：{pnl:.2f}元")
+        hit = True
+
+    if not hit:
+        return False
+
+    try:
+        # UI 操作加锁：聚焦窗口后点击该行全平控件
+        with shared_data.ctrl_rlock:
+            shared_data.trade_window.maximize()
+            shared_data.trade_window.set_focus()
+            sleep(0.5)
+            close_ctrl.click_input()
+        print_context(f"close_single_position 触发平仓：{close_reason}")
+
+        # 手续费、净利
+        fut_info = get_future_info(ts_code, 0) if ts_code else None
+        per_lot_two_way_fee = (fut_info.get('fee', 0) * 2) if fut_info else 0
+        total_fee = per_lot_two_way_fee * lots
+        net_profit = pnl - total_fee
+
+        # 平仓成功后设置冷却，避免立即复购
+        with shared_data.variables_rlock:
+            shared_data.valid_time = datetime.now() + timedelta(minutes=shared_data.valid_trade_interval)
+            print_context(f"【平仓点击成功，设置冷却】下次交易有效时间起点：{shared_data.valid_time}")
+
+        # 存档 + 今日汇总
+        ut = getattr(shared_data, "user_type", 0)
+        append_close_record(user_type=ut, pnl=pnl, ts_code=ts_code or variety,
+                            strategy_id=strategy_id, trade_period=trade_period)
+        stat = get_today_trade_stat()
+        sim_cnt, sim_pnl = stat["sim_user"]
+        real_cnt, real_pnl = stat["real_user"]
+        full_msg = (
+            f"{close_reason}\n"
+            f"本次平仓手数：{lots}手\n"
+            f"市值盈亏（涨跌差价）：{pnl:.2f}元\n"
+            f"本次双边手续费：{total_fee:.2f}元\n"
+            f"✅纯利润：{net_profit:.2f}元\n"
+            f"------------ 今日平仓汇总 ------------\n"
+            f"【模拟账户】平仓次数：{sim_cnt}，累计毛盈亏：{sim_pnl:.2f}元\n"
+            f"【实盘账户】平仓次数：{real_cnt}，累计毛盈亏：{real_pnl:.2f}元"
+        )
+        send_msg(f"【单持仓监控】自动平仓成功 - 品种：{variety or ts_code}\n{full_msg}")
+
+        # 重置 YAML 临时参数（对齐普通监控平仓动作）
+        reset_temp_params_in_yaml()
+        return True
+
+    except Exception as e:
+        err_msg = f"【单持仓平仓异常】{str(e)}"
+        print_context(err_msg)
+        send_msg(err_msg)
+        return False
+
+
+if __name__ == "__main__":
+    # 独立调试入口：直接连接当前已登录的同花顺主窗口跑一遍
+    local_control()
+    res = match_close_and_profit()
+    print("匹配结果：", res)
+    is_lock_position()

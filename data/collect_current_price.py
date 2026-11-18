@@ -8,10 +8,10 @@ from time import sleep
 from public.shared_data import click_control
 
 # 取消时间间隔判断，固定满100条入库
-BUFFER_MAX_NUM_NORMAL = 2000
+BUFFER_MAX_NUM_NORMAL = 200
 # BUFFER_MAX_NUM_EARLY = 3  # 开盘前5分钟阈值：3条
 
-def get_current_price(ts_code="m2611"):
+def get_current_price(ts_code="m2701"):
     from public.shared_data import simulate_input
     price_patten = re.compile(r"^\d+\.\d+$|^\d+$")
     is_printed = False
@@ -114,4 +114,4 @@ def get_current_price(ts_code="m2611"):
 
 if __name__ == "__main__":
     print("交易状态：", shared_data.trade_flag())
-    # get_current_price("jd2609")
+    get_current_price("m2701")

@@ -5,13 +5,12 @@ common_conditions:
 - expr: "not is_cooling()"
 
 temp_params:
-  temp_profit: 50
-  temp_loss:
-  valid_trade_interval: 3
+  temp_profit: 20
+  temp_loss: -20
+  valid_trade_interval: 2
   temp_lots: 1
-  temp_hold_value: 4
-  temp_direction: 
-
+  temp_hold_value:
+  temp_direction: sideways
 
 strategy_001:
   comment: 开盘下单配置参数>9:00-9:05 21:00-21:05,大盘rise或者sideways,高开且K线为rise则买多并设置止盈固定值

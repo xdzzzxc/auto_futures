@@ -8,7 +8,7 @@ from lxml import etree
 from typing import Dict, Optional, List, Tuple
 from playwright.sync_api import sync_playwright, TimeoutError, Browser, Page
 import threading
-from tools.write_yaml import set_temp_param
+from tools.write_yaml import write_cfg
 from public import shared_data
 from public.agent import get_headers
 from public.print_context import print_context
@@ -369,7 +369,7 @@ def trend_poll_loop(interval_min: int = 5, mode: str = "split"):
                     direction_dict[ts_code] = trend
                 result_map[ts_code] = trend
                 # 写入对应合约yaml
-                set_temp_param("temp_direction", trend, ts_code=None, skip_if_same=True)
+                write_cfg(root_key="temp_params", sub_key="temp_direction", new_value=trend, ts_code=None)
                 print_context(
                     f"[{datetime.now().strftime('%H:%M:%S')}]【资讯轮询结果】{result_map} | trend={trend} | {info_text}"
                 )
