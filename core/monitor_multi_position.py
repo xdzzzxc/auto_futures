@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 多仓（原锁仓）持仓行：全平控件 <-> 同行实时盈亏数值 一一对应定位模块
+
 业务背景（同花顺期货通 WPF 持仓面板）：
 - 持仓每一行是一个 DataRowView，行内包含：方向(多/空)、合约、手数、价格、盈亏数值、“全平”按钮等 TextBlock。
 - “逐笔浮盈”是表头文本，盈亏数值行位于该表头下方，与“全平”处于同一行（top 相同，可能 ±1 像素抖动）。
@@ -19,13 +20,23 @@
 - “全平”控件数量为 0（或窗口无效 / 扫描异常）：返回 None。
 - 每次扫描结果会同步快照到 shared_data.position_data_dict；无持仓时清空该字典。
 
+性能优化（控件句柄缓存）：
+- 首次 / 行数变化 / 控件失效时，做一次全量 UIA 定位，把每行的 全平、盈亏、品种、方向 控件句柄缓存起来；
+- 后续轮次不再全量遍历 descendants、不再逐控件算 rectangle 匹配，直接复用缓存句柄只读 .window_text() 刷新盈亏；
+- 每 RESCAN_INTERVAL 轮强制做一次全量行数核对，兜底发现中途开仓 / 平仓导致的行数变化；
+- 单行连续 STALE_LIMIT 次读取失效（stale element）后，触发全量重扫。
+
 注意：pywinauto UIA 的 RECT 属性为 .left / .top / .right / .bottom（不是 .T/.L/.R/.B）。
 """
+
 import re
+import threading
 from time import sleep
+from datetime import datetime, timedelta
+
 from core.connect_ths import local_control, is_win_valid, is_around
 from pywinauto.controls.uiawrapper import UIAWrapper
-from datetime import datetime, timedelta
+
 from public import shared_data
 from public.print_context import print_context
 from sendmsg.pushplus import send_msg
@@ -34,6 +45,10 @@ from core.trade import reset_temp_params_in_yaml
 from public.jiaoyisuo import get_future_info
 from core.monitor import get_today_trade_stat
 
+
+# 缓存轮询参数
+RESCAN_INTERVAL = 2      # 每 N 轮做一次全量行数核对；中间轮次纯读缓存控件3-4秒比较合适
+STALE_LIMIT = 2          # 单行连续读取失效次数阈值，达到后触发全量重扫3次比较合适
 
 _PNL_RAW_SYMBOLS = {",", "+", "-", ".", " "}
 
@@ -50,6 +65,37 @@ CODE_TO_VARIETY = {
     "ag": "沪银"
 }
 
+
+# ----------------------------------------------------------------------------
+# 控件句柄缓存
+# ----------------------------------------------------------------------------
+class _PosControlCache:
+    """
+    持仓行控件缓存：
+    - rows: {idx: {"close_ctrl", "pnl_ctrl", "variety_ctrl", "dir_ctrl",
+                    "variety", "direction", "ts_code", "top"}}
+    - 仅缓存控件句柄与稳定字段（品种/方向/代码），盈亏每轮从句柄实时读取，不缓存盈亏结果。
+    """
+
+    def __init__(self):
+        self.lock = threading.RLock()
+        self.window = None
+        self.rows = {}
+        self.row_count = 0
+        self.stale_cnt = {}
+        self.round = 0
+
+    def reset(self):
+        self.window = None
+        self.rows = {}
+        self.row_count = 0
+        self.stale_cnt = {}
+        self.round = 0
+
+
+_POS_CACHE = _PosControlCache()
+
+
 def _is_pnl_text(txt: str) -> bool:
     """判断文本是否像一个盈亏数值（含 +30 / -15 / 30.5 / -- 等占位）。"""
     if txt is None:
@@ -62,6 +108,7 @@ def _is_pnl_text(txt: str) -> bool:
     cleaned = "".join(ch for ch in t if ch not in _PNL_RAW_SYMBOLS)
     return cleaned.isdigit()
 
+
 def _parse_pnl(txt: str):
     """盈亏文本 -> float；解析失败返回原始字符串。"""
     if txt is None:
@@ -72,6 +119,7 @@ def _parse_pnl(txt: str):
     except (ValueError, TypeError):
         return txt.strip()
 
+
 def _iter_text_controls(window):
     """递归遍历窗口内所有 Text 控件（descendants 不支持 title 过滤，文本需自行判断）。"""
     try:
@@ -79,6 +127,7 @@ def _iter_text_controls(window):
     except Exception as e:
         print_context(f"[lock_position_profit] 遍历 Text 控件异常：{repr(e)}")
         return []
+
 
 def _find_row_container(ctrl):
     """
@@ -97,6 +146,7 @@ def _find_row_container(ctrl):
     except Exception:
         pass
     return None
+
 
 def _match_profit_in_row(close_ctrl, close_rect, text_ctrls, header_left):
     """
@@ -155,6 +205,7 @@ def _match_profit_in_row(close_ctrl, close_rect, text_ctrls, header_left):
     _, _, profit_ctrl, profit_text = candidates[0]
     return profit_ctrl, profit_text
 
+
 def _match_text_in_row(close_ctrl, close_rect, text_ctrls, header_left):
     """
     【通用同行文本匹配】专门给品种、多空使用，不做数值过滤！
@@ -200,6 +251,7 @@ def _match_text_in_row(close_ctrl, close_rect, text_ctrls, header_left):
     _, ctrl, txt = candidates[0]
     return ctrl, txt
 
+
 def _collect_row_all_text(close_ctrl, close_rect, text_ctrls):
     """收集该行全部文本，用于兜底正则解析（适配 玉米2701  1手多仓 -60 这种合并文本）"""
     target_top = close_rect.top
@@ -216,6 +268,7 @@ def _collect_row_all_text(close_ctrl, close_rect, text_ctrls):
             buf.append(t)
     return " ".join(buf)
 
+
 def _normalize_direction(raw_txt: str):
     """归一化为 多 / 空，识别：买、多仓、卖、空仓"""
     if not raw_txt:
@@ -227,9 +280,11 @@ def _normalize_direction(raw_txt: str):
         return "空"
     return None
 
+
 # 界面按钮 / 状态词，不属于品种名，兜底解析时需排除
 _UI_WORDS = {"全平", "反手", "止", "盈", "亏", "多", "空", "买", "卖",
              "多仓", "空仓", "手", "仓", "普通交易", "投机", "交易", "平仓"}
+
 
 def _parse_variety_from_text(raw: str):
     """从整行文本提取中文品种名；取不到则用代码映射"""
@@ -254,6 +309,7 @@ def _parse_variety_from_text(raw: str):
             return CODE_TO_VARIETY[code]
     return None
 
+
 def _parse_ts_code_from_text(raw: str):
     """从整行文本提取完整合约代码（如 m2701 / c2701）；取不到返回 None。"""
     if not raw:
@@ -263,45 +319,20 @@ def _parse_ts_code_from_text(raw: str):
         return m.group(1).lower()
     return None
 
-def match_close_and_profit(window=None):
-    """
-    主入口：扫描全部“全平”持仓行（1 个单仓 / 2 个及以上多仓），逐一绑定同行：盈亏、品种(中文)、多空、合约代码
-    :param window: 可选，传入交易主窗口；为空则取 shared_data.trade_window
-    :return:
-        {
-            1: {
-                "close_ctrl": 全平控件对象,
-                "pnl": 盈亏数值,
-                "variety": "玉米 / 豆粕 中文品种名",
-                "direction": "多 / 空",
-                "ts_code": "合约代码"
-            },
-            2: { ... }
-        }
-        全平数量为 0 / 窗口无效 / 扫描异常时返回 None。
-    """
-    # 1. 取窗口（加锁，避免与其他线程并发读写 trade_window）
-    from public import shared_data
-    if window is None:
-        if shared_data is not None and hasattr(shared_data, "trade_window"):
-            try:
-                with shared_data.ctrl_rlock:
-                    window = shared_data.trade_window
-            except Exception:
-                window = shared_data.trade_window
-        else:
-            window = None
 
-    if window is None or not is_win_valid(window):
-        print_context("[lock_position_profit] 交易主窗口无效，无法定位全平/盈亏控件，返回 None")
-        return None
-
+# ----------------------------------------------------------------------------
+# 全量定位（仅在首次 / 行数变化 / 控件失效时调用）
+# ----------------------------------------------------------------------------
+def _full_scan(window):
+    """
+    全量遍历 UIA 定位全部持仓行，绑定同行 盈亏 / 品种 / 多空 / 合约代码，并缓存控件句柄。
+    :return: (result, rows_cache)；无持仓 / 窗口无效 / 异常时返回 (None, None)
+    """
     try:
         text_ctrls = _iter_text_controls(window)
-
         if not text_ctrls:
             print_context("[lock_position_profit] 未扫描到任何 Text 控件，返回 None")
-            return None
+            return None, None
 
         # 表头别名池，自动匹配，不用反复改
         header_alias = {
@@ -310,13 +341,11 @@ def match_close_and_profit(window=None):
             "direction": ["多空", "买卖", "方向"]
         }
         header_map = {"pnl": None, "variety": None, "direction": None}
-        debug_header_list = []
 
         for c in text_ctrls:
             try:
                 txt = (c.window_text() or "").strip()
                 rect = c.rectangle()
-                debug_header_list.append(txt)
                 if txt in header_alias["pnl"]:
                     header_map["pnl"] = rect.left
                 elif txt in header_alias["variety"]:
@@ -325,9 +354,6 @@ def match_close_and_profit(window=None):
                     header_map["direction"] = rect.left
             except Exception:
                 continue
-
-        # print_context(f"[lock_position_profit] 【调试】面板全部静态文本：{debug_header_list}")
-        # print_context(f"[lock_position_profit] 表头基准left：{header_map}")
 
         # 收集所有“全平”控件，按 top 从小到大排序（上面一行 = 1，下面一行 = 2）
         close_list = []
@@ -342,25 +368,30 @@ def match_close_and_profit(window=None):
                 continue
         close_list.sort(key=lambda x: x[0])
 
-        # 数量校验：只要扫描到“全平”控件即视为有持仓，1 个 / 2 个 / 多个均逐行绑定；
-        # 仅当 0 个时判定无持仓，清空持仓快照并返回 None。
+        # 数量校验：0 个判定无持仓，清空持仓快照并返回 None
         if len(close_list) == 0:
             with shared_data.dict_rlock:
                 shared_data.position_data_dict.clear()
             print_context("[lock_position_profit] 未定位到“全平”控件，当前无持仓，返回 None")
-            return None
+            return None, None
 
         result = {}
+        rows_cache = {}
+
         for idx, (_, close_ctrl, close_rect) in enumerate(close_list, start=1):
             # 逐笔浮盈（沿用原有盈亏匹配函数）
             if header_map["pnl"] is not None:
-                _, profit_text = _match_profit_in_row(close_ctrl, close_rect, text_ctrls, header_map["pnl"])
+                profit_ctrl, profit_text = _match_profit_in_row(
+                    close_ctrl, close_rect, text_ctrls, header_map["pnl"]
+                )
             else:
-                profit_text = None
+                profit_ctrl, profit_text = None, None
             pnl_value = _parse_pnl(profit_text) if profit_text is not None else None
 
             # 品种：优先列匹配，失败走整行兜底解析
-            _, variety_text = _match_text_in_row(close_ctrl, close_rect, text_ctrls, header_map["variety"])
+            variety_ctrl, variety_text = _match_text_in_row(
+                close_ctrl, close_rect, text_ctrls, header_map["variety"]
+            )
             row_all_text = _collect_row_all_text(close_ctrl, close_rect, text_ctrls)
             # 列匹配抓到的若是合约代码（如 c2701 / m2701），说明该列是合约代码列，丢弃后走整行文本兜底取中文品种名
             if variety_text and re.match(r"^[a-zA-Z]+\d{3,4}$", variety_text.strip()):
@@ -369,7 +400,9 @@ def match_close_and_profit(window=None):
                 variety_text = _parse_variety_from_text(row_all_text)
 
             # 多空：优先列匹配，失败走整行兜底解析
-            _, dir_raw = _match_text_in_row(close_ctrl, close_rect, text_ctrls, header_map["direction"])
+            dir_ctrl, dir_raw = _match_text_in_row(
+                close_ctrl, close_rect, text_ctrls, header_map["direction"]
+            )
             direction_text = _normalize_direction(dir_raw)
             if not direction_text:
                 direction_text = _normalize_direction(row_all_text)
@@ -385,32 +418,183 @@ def match_close_and_profit(window=None):
                 "ts_code": ts_code_text
             }
             result[idx] = row_data
-            # 调试阶段打印日志代码
-            # print_context(
-            #     f"[lock_position_profit] 第 {idx} 行：全平 top={close_rect.top} "
-            #     f"整行=[{row_all_text}] 盈亏={profit_text}({pnl_value}) | 品种={variety_text} | 代码={ts_code_text} | 多空={direction_text}"
-            # )
 
-        # 同步持仓行快照到全局 position_data_dict（加锁，供其他线程读取）
-        snapshot = {
-            k: {
-                "close_ctrl": v["close_ctrl"],
-                "pnl": v["pnl"],
-                "variety": v["variety"],
-                "direction": v["direction"],
-                "ts_code": v.get("ts_code")
+            rows_cache[idx] = {
+                "close_ctrl": close_ctrl,
+                "pnl_ctrl": profit_ctrl,
+                "variety_ctrl": variety_ctrl,
+                "dir_ctrl": dir_ctrl,
+                "variety": variety_text,
+                "direction": direction_text,
+                "ts_code": ts_code_text,
+                "top": close_rect.top,
             }
-            for k, v in result.items()
-        }
-        with shared_data.dict_rlock:
-            shared_data.position_data_dict.clear()
-            shared_data.position_data_dict.update(snapshot)
 
-        return result
+        return result, rows_cache
 
     except Exception as e:
         print_context(f"[lock_position_profit] 定位全平/盈亏异常：{repr(e)}")
+        return None, None
+
+
+# ----------------------------------------------------------------------------
+# 增量刷新：复用缓存控件句柄，只读文本，不再全量遍历
+# ----------------------------------------------------------------------------
+def _refresh_from_cache(cache: _PosControlCache):
+    """
+    基于缓存控件句柄读取最新盈亏文本。
+    :return: 对外结构 result；若整行失效 / 行数对不上则返回 None，交由全量重扫。
+    """
+    with cache.lock:
+        rows_snapshot = {k: dict(v) for k, v in cache.rows.items()}
+        cached_count = cache.row_count
+        stale_cnt = dict(cache.stale_cnt)
+
+    result = {}
+    alive = 0
+
+    for idx, item in rows_snapshot.items():
+        try:
+            # 盈亏：实时读盈亏控件文本
+            pnl_ctrl = item.get("pnl_ctrl")
+            pnl_value = None
+            if pnl_ctrl is not None:
+                pnl_text = (pnl_ctrl.window_text() or "").strip()
+                pnl_value = _parse_pnl(pnl_text)
+
+            # 品种：优先复用缓存中文品种名；若品种句柄可读且不是代码列，则刷新
+            variety = item.get("variety")
+            variety_ctrl = item.get("variety_ctrl")
+            if variety_ctrl is not None:
+                try:
+                    vt = (variety_ctrl.window_text() or "").strip()
+                    if vt and not re.match(r"^[a-zA-Z]+\d{3,4}$", vt):
+                        variety = vt
+                except Exception:
+                    pass
+
+            # 多空：优先读方向句柄，失败沿用缓存方向
+            direction = item.get("direction")
+            dir_ctrl = item.get("dir_ctrl")
+            if dir_ctrl is not None:
+                try:
+                    dt = _normalize_direction(dir_ctrl.window_text())
+                    if dt:
+                        direction = dt
+                except Exception:
+                    pass
+
+            ts_code = item.get("ts_code") or ""
+
+            result[idx] = {
+                "close_ctrl": item["close_ctrl"],
+                "pnl": pnl_value,
+                "variety": variety,
+                "direction": direction,
+                "ts_code": ts_code,
+            }
+            alive += 1
+            stale_cnt[idx] = 0
+        except Exception:
+            stale_cnt[idx] = stale_cnt.get(idx, 0) + 1
+            if stale_cnt[idx] >= STALE_LIMIT:
+                print_context(f"[lock_position_profit] 第 {idx} 行控件连续 {STALE_LIMIT} 次读取失效，触发全量重扫")
+                with cache.lock:
+                    cache.stale_cnt = stale_cnt
+                return None
+            continue
+
+    # 一行都没读到，或存活行数与缓存不一致（中途平仓 / 新开），交全量核对
+    if alive == 0 or alive != cached_count:
         return None
+
+    with cache.lock:
+        cache.stale_cnt = stale_cnt
+    return result
+
+
+def _snapshot_position_data(result: dict) -> None:
+    """把本轮持仓结果快照到全局 position_data_dict（加锁，供其他线程读取）。"""
+    snapshot = {
+        k: {
+            "close_ctrl": v["close_ctrl"],
+            "pnl": v["pnl"],
+            "variety": v["variety"],
+            "direction": v["direction"],
+            "ts_code": v.get("ts_code")
+        }
+        for k, v in result.items()
+    }
+    with shared_data.dict_rlock:
+        shared_data.position_data_dict.clear()
+        shared_data.position_data_dict.update(snapshot)
+
+
+# ----------------------------------------------------------------------------
+# 对外主入口（函数名 / 签名 / 返回结构保持不变）
+# ----------------------------------------------------------------------------
+def match_close_and_profit(window=None):
+    """
+    主入口：扫描全部“全平”持仓行（1 个单仓 / 2 个及以上多仓），逐一绑定同行：盈亏、品种(中文)、多空、合约代码。
+
+    控件缓存策略：
+    - 缓存命中且行数未变：复用缓存句柄只读文本，不再全量 UIA 遍历；
+    - 首次 / 每 RESCAN_INTERVAL 轮核对 / 行数变化 / 控件连续失效：全量重新定位并刷新缓存。
+
+    :param window: 可选，传入交易主窗口；为空则取 shared_data.trade_window
+    :return:
+        {
+            1: {"close_ctrl": 全平控件对象, "pnl": 盈亏值, "variety": "玉米 / 豆粕 中文品种名",
+                "direction": "多 / 空", "ts_code": "合约代码"},
+            2: { ... }
+        }
+        全平数量为 0 / 窗口无效 / 扫描异常时返回 None。
+    """
+    # 1. 取窗口（加锁，避免与其他线程并发读写 trade_window）
+    if window is None:
+        if shared_data is not None and hasattr(shared_data, "trade_window"):
+            try:
+                with shared_data.ctrl_rlock:
+                    window = shared_data.trade_window
+            except Exception:
+                window = shared_data.trade_window
+        else:
+            window = None
+
+    if window is None or not is_win_valid(window):
+        print_context("[lock_position_profit] 交易主窗口无效，无法定位全平/盈亏控件，返回 None")
+        return None
+
+    cache = _POS_CACHE
+    with cache.lock:
+        # 窗口对象切换（重连 / 换窗）：清空旧缓存
+        if cache.window is not None and cache.window is not window:
+            cache.reset()
+        cache.window = window
+        cache.round += 1
+        need_rescan = (cache.row_count == 0) or (cache.round % RESCAN_INTERVAL == 0)
+
+    # 2. 缓存命中：增量读文本
+    if not need_rescan:
+        result = _refresh_from_cache(cache)
+        if result is not None:
+            _snapshot_position_data(result)
+            return result
+
+    # 3. 全量定位并刷新缓存
+    result, rows_cache = _full_scan(window)
+    with cache.lock:
+        if result is None:
+            cache.reset()
+        else:
+            cache.rows = rows_cache
+            cache.row_count = len(rows_cache)
+            cache.stale_cnt = {k: 0 for k in rows_cache}
+
+    if result is not None:
+        _snapshot_position_data(result)
+    return result
+
 
 def is_lock_position():
     """
@@ -498,15 +682,17 @@ def monitor_multi_position_profit_loss():
             if ths_win_data is None:
                 sleep(1)
                 continue
+
             # 多仓交易状态信息显示
             status_parts = []
             for idx, row in ths_win_data.items():
                 pnl = float(row["pnl"])
                 variety = row["variety"]
                 direction = row["direction"]
-                status_parts.append(f"{variety}:{direction}:{pnl:2f}")
+                status_parts.append(f"{variety}-{direction} [{pnl:.2f}]")
             status_str = " | ".join(status_parts)
             print(f"\r【多仓监控】 {datetime.now().strftime('%H:%M:%S')} | {status_str}", flush=True, end="")
+
             # 第一步：完整遍历全部行，收集命中候选，不提前break
             candidate_list = []
             for idx, row in ths_win_data.items():
@@ -556,7 +742,6 @@ def monitor_multi_position_profit_loss():
                     print_context(f"多仓单行读取异常，跳过该行：{str(row_err)}")
                     continue
 
-            # 第二步：本轮只处理第一个命中的候选，最多平一行
             # 第二步：遍历本轮所有命中候选，多仓满足条件全部平仓（不再只取第一个）
             if candidate_list:
                 for hit_item in candidate_list:
@@ -761,14 +946,6 @@ def close_single_position(window=None) -> bool:
 
 
 if __name__ == "__main__":
-    from core.connect_ths import local_control
-    local_control()
-    res = close_single_position()
-    print(res)
-    exit()
-    # 独立调试入口：直接连接当前已登录的同花顺主窗口跑一遍
     local_control()
     res = match_close_and_profit()
     print("匹配结果：", res)
-    is_lock_position()
-

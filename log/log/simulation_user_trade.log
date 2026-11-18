@@ -51222,3 +51222,5 @@ AttributeError: 'function' object has no attribute 'start'
 2026-11-18 14:12:58 - simulation_user - INFO - main.py[501] init_shared_data - trace_id=INT - 开始初始化交易程序
 2026-11-18 19:48:18 - simulation_user - INFO - main.py[501] init_shared_data - trace_id=INT - 开始初始化交易程序
 2026-11-18 20:16:10 - simulation_user - INFO - main.py[501] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-18 20:19:47 - simulation_user - INFO - main.py[501] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-18 22:30:59 - simulation_user - INFO - main.py[501] init_shared_data - trace_id=INT - 开始初始化交易程序

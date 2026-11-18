@@ -187,6 +187,11 @@ def sync_temp_params(new_pool: dict):
     lots = temp_params.get("temp_lots", 1)
     temp_hold_value = temp_params.get("temp_hold_value", 0)
     temp_get_price_interval = temp_params.get("temp_get_price_interval", 1)
+    change_future_code = temp_params.get("change_future_code", None)
+    if change_future_code:
+        with variables_rlock:
+            shared_data.ts_code = change_future_code
+            print_context(f"✅量化拟交易期货品种 >>> {shared_data.ts_code}")
     if temp_hold_value is None:
         temp_hold_value = 0
     temp_direction = temp_params.get("temp_direction", "")
@@ -195,7 +200,7 @@ def sync_temp_params(new_pool: dict):
         with shared_data.variables_rlock:
             shared_data.get_price_interval = temp_get_price_interval
             print_context(f"✅[临时参数热更新] 获取交易品种实时价格频率已变更为：{temp_get_price_interval}")
-    with variables_rlock:
+    with shared_data.variables_rlock:
         if temp_direction:
             with variables_rlock:
                 shared_data.direction = temp_params.get("temp_direction")
