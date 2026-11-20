@@ -33,10 +33,8 @@ import re
 import threading
 from time import sleep
 from datetime import datetime, timedelta
-
+import time
 from core.connect_ths import local_control, is_win_valid, is_around
-from pywinauto.controls.uiawrapper import UIAWrapper
-
 from public import shared_data
 from public.print_context import print_context
 from sendmsg.pushplus import send_msg
@@ -47,8 +45,12 @@ from core.monitor import get_today_trade_stat
 
 
 # 缓存轮询参数
-RESCAN_INTERVAL = 2      # 每 N 轮做一次全量行数核对；中间轮次纯读缓存控件3-4秒比较合适
-STALE_LIMIT = 2          # 单行连续读取失效次数阈值，达到后触发全量重扫3次比较合适
+RESCAN_INTERVAL = 5      # 每 N 轮做一次全量行数核对；中间轮次纯读缓存控件3-4秒比较合适
+STALE_LIMIT = 3          # 单行连续读取失效次数阈值，达到后触发全量重扫3次比较合适
+
+# 有持仓但不在持仓面板时，自动切回“持仓”标签的节流间隔（秒），避免频繁点击打扰人工浏览
+POS_PANEL_SWITCH_INTERVAL = 5.0
+_last_switch_pos_ts = 0.0
 
 _PNL_RAW_SYMBOLS = {",", "+", "-", ".", " "}
 
@@ -328,6 +330,7 @@ def _full_scan(window):
     全量遍历 UIA 定位全部持仓行，绑定同行 盈亏 / 品种 / 多空 / 合约代码，并缓存控件句柄。
     :return: (result, rows_cache)；无持仓 / 窗口无效 / 异常时返回 (None, None)
     """
+    global _last_switch_pos_ts
     try:
         text_ctrls = _iter_text_controls(window)
         if not text_ctrls:
@@ -370,9 +373,52 @@ def _full_scan(window):
 
         # 数量校验：0 个判定无持仓，清空持仓快照并返回 None
         if len(close_list) == 0:
+            # ===== 区分“真无持仓”与“人为切到了其他面板” =====
+            # 金额解析：仅保留数字 / 小数点 / 负号，兼容千分位与占位文本
+            def _parse_money(ctrl):
+                if ctrl is None:
+                    return None
+                try:
+                    txt = (ctrl.window_text() or "").strip()
+                    digits = "".join(c for c in txt if c in {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "-"})
+                    return float(digits) if digits else None
+                except Exception:
+                    return None
+
+            equity_ctrl = avail_ctrl = pos_tab_ctrl = None
+            with shared_data.dict_rlock:
+                ctrls = getattr(shared_data, "ths_common_control", {}) or {}
+                if ctrls.get("权益"):
+                    equity_ctrl = ctrls["权益"][0]
+                if ctrls.get("可用资金"):
+                    avail_ctrl = ctrls["可用资金"][0]
+                if ctrls.get("持仓"):
+                    pos_tab_ctrl = ctrls["持仓"][0]
+
+            equity_val = _parse_money(equity_ctrl)
+            avail_val = _parse_money(avail_ctrl)
+            # 两者都读到且差额 <=1 元 → 真无持仓；否则视为有持仓但当前不在持仓面板
+            has_position = not (
+                equity_val is not None and avail_val is not None
+                and abs(equity_val - avail_val) <= 1.0
+            )
+
+            if has_position and pos_tab_ctrl is not None:
+                now_ts = time.time()
+                if now_ts - _last_switch_pos_ts >= POS_PANEL_SWITCH_INTERVAL:
+                    print_context("[lock_position_profit] 检测到存在持仓，但未找到全平控件，自动切回持仓面板")
+                    with shared_data.ctrl_rlock:
+                        try:
+                            pos_tab_ctrl.set_focus()
+                            pos_tab_ctrl.click_input()
+                            _last_switch_pos_ts = now_ts
+                        except Exception as e:
+                            print_context(f"[lock_position_profit] 点击持仓标签失败：{str(e)}")
+            # ===== 新增结束 =====
+
             with shared_data.dict_rlock:
                 shared_data.position_data_dict.clear()
-            print_context("[lock_position_profit] 未定位到“全平”控件，当前无持仓，返回 None")
+            print("\r[lock_position_profit] 未定位到“全平”控件，返回 None，请切回到持仓面板！", flush=True, end="")
             return None, None
 
         result = {}
@@ -650,11 +696,13 @@ def monitor_multi_position_profit_loss():
     """
     多仓（锁仓 / 多持仓）状态的监控操作
     常驻线程，flag=False时空转；flag=True读取全部持仓行，本行独立全平控件平仓
-    本轮完整扫描所有持仓行，收集命中候选，最多平一行，避免后行饿死
+    本轮完整扫描所有持仓行，收集命中候选，满足条件全部平仓
     多仓平仓不设置冷却、不重置YAML临时参数
     """
     print_flag = True
-    pending_close = set()
+    # 改为字典：key=idx，value=加入时间戳，增加TTL超时兜底
+    pending_close = dict()
+    PROTECT_TTL = 3.0  # 点击保护超时秒数，同花顺界面刷新慢可以调到3~5
     print_context("LockMonitorThread 多仓盈亏监控线程已启动")
     while True:
         try:
@@ -683,6 +731,14 @@ def monitor_multi_position_profit_loss():
                 sleep(1)
                 continue
 
+            # ========== 新增：每轮开头清理超时保护标记 ==========
+            now_ts = time.time()
+            pending_close = {
+                idx: add_ts
+                for idx, add_ts in pending_close.items()
+                if now_ts - add_ts < PROTECT_TTL
+            }
+
             # 多仓交易状态信息显示
             status_parts = []
             for idx, row in ths_win_data.items():
@@ -691,13 +747,17 @@ def monitor_multi_position_profit_loss():
                 direction = row["direction"]
                 status_parts.append(f"{variety}-{direction} [{pnl:.2f}]")
             status_str = " | ".join(status_parts)
-            print(f"\r【多仓监控】 {datetime.now().strftime('%H:%M:%S')} | {status_str}", flush=True, end="")
+            print(f"\r【多仓监控】 {datetime.now().strftime('%H:%M:%S')} | {status_str} | 止盈={shared_data.pre_profit} 止损={shared_data.pre_loss}", flush=True, end="")
 
             # 第一步：完整遍历全部行，收集命中候选，不提前break
             candidate_list = []
             for idx, row in ths_win_data.items():
                 try:
-                    pnl = float(row["pnl"])
+                    pnl_raw = row["pnl"]
+                    if pnl_raw is None:
+                        print_context(f"多仓行{idx} 盈亏读取为None，跳过本轮判断")
+                        continue
+                    pnl = float(pnl_raw)
                     close_ctrl = row["close_ctrl"]
                     variety = row["variety"]
                     direction = row["direction"]
@@ -742,7 +802,7 @@ def monitor_multi_position_profit_loss():
                     print_context(f"多仓单行读取异常，跳过该行：{str(row_err)}")
                     continue
 
-            # 第二步：遍历本轮所有命中候选，多仓满足条件全部平仓（不再只取第一个）
+            # 第二步：遍历本轮所有命中候选，多仓满足条件全部平仓
             if candidate_list:
                 for hit_item in candidate_list:
                     row = hit_item["row"]
@@ -755,10 +815,11 @@ def monitor_multi_position_profit_loss():
                     lots = hit_item["lots"]
                     strategy_id = hit_item["strategy_id"]
                     trade_period = hit_item["trade_period"]
+                    idx = hit_item["idx"]
 
-                    key = (ts_code or variety, direction)
-                    if key in pending_close:
-                        print_context(f"【多仓】{variety} {direction} 已触发平仓，等待界面刷新，跳过本轮")
+                    # ✅ 保护key改为行idx
+                    if idx in pending_close:
+                        print_context(f"【多仓】{variety} {direction} 行{idx} 已触发平仓，等待界面刷新，跳过本轮")
                         continue
 
                     # UI操作加锁：对齐单仓，最大化+前置窗口+聚焦
@@ -776,8 +837,8 @@ def monitor_multi_position_profit_loss():
                         except Exception:
                             pass
                         close_ctrl.click_input()
-                    # 标记该持仓进入待刷新保护，防止下一轮重复点击
-                    pending_close.add(key)
+                    # 记录点击保护时间戳
+                    pending_close[idx] = time.time()
                     print_context(f"多仓监控触发平仓：{close_reason}")
 
                     # 手续费、统计、推送
@@ -812,6 +873,7 @@ def monitor_multi_position_profit_loss():
             send_msg(err_msg)
             sleep(1)
             continue
+
 
 
 def close_single_position(window=None) -> bool:

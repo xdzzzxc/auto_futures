@@ -15,7 +15,6 @@ from data.data_from_sina import fetch_future_data
 from public.sync_time import sync_time
 from data.get_quote import get_open_price
 from data.db_price import flush_remain_buffer
-# from data.reget_open_price import reget_open_price
 from public.anti_screensaver import main_daemon
 from public.shared_data import clean_old_trade_db, default_lots_dict
 from audio.play_alert import *
@@ -491,7 +490,7 @@ def set_lot_size():
         return lot_result
 
 
-def init_shared_data(user_type, ts_code, target_days, trade_futures_list, get_price_interval=5):
+def init_shared_data(user_type, ts_code, target_days, trade_futures_list, get_price_interval=2):
     # sound_order()
     print_context("程序正在校验日期、时间 ······")
     sync_time()
@@ -513,6 +512,7 @@ def init_shared_data(user_type, ts_code, target_days, trade_futures_list, get_pr
     # else:
     #     shared_data.ts_code = trade_futures_list[0]  # 默认第一个为交易品种，如有改变再在交易窗口中切换
     shared_data.get_price_interval = get_price_interval  # 获取即时行情价格的时间间隔
+    # reset_temp_params_in_yaml()  # 初始化程序时按程序预定值写入策略文件
     clean_old_trade_db(dry_run=False)
     fetch_future_data()
     check_ths_status()  # 检查同花顺期货通启动状态

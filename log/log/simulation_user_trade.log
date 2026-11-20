@@ -51224,3 +51224,12 @@ AttributeError: 'function' object has no attribute 'start'
 2026-11-18 20:16:10 - simulation_user - INFO - main.py[501] init_shared_data - trace_id=INT - 开始初始化交易程序
 2026-11-18 20:19:47 - simulation_user - INFO - main.py[501] init_shared_data - trace_id=INT - 开始初始化交易程序
 2026-11-18 22:30:59 - simulation_user - INFO - main.py[501] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-18 23:07:30 - simulation_user - INFO - main.py[501] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-19 09:49:40 - simulation_user - INFO - main.py[501] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-19 10:34:02 - simulation_user - INFO - main.py[501] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-19 10:54:10 - simulation_user - INFO - main.py[501] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-19 11:31:35 - simulation_user - INFO - main.py[501] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-19 14:45:32 - simulation_user - INFO - main.py[501] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-19 15:24:44 - simulation_user - INFO - main.py[501] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-19 15:29:26 - simulation_user - INFO - main.py[501] init_shared_data - trace_id=INT - 开始初始化交易程序
+2026-11-19 15:29:41 - simulation_user - INFO - main.py[501] init_shared_data - trace_id=INT - 开始初始化交易程序

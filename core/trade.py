@@ -130,7 +130,7 @@ signal.signal(signal.SIGINT, sig_handler)
 signal.signal(signal.SIGTERM, sig_handler)
 
 # 配置文件路径 & 文件修改时间记录
-# 获取trade.py脚本所在目录，cfg_pool.yaml和trade.py放在同一个文件夹
+# 获取trade.py脚本所在目录
 _BASE_DIR = get_data_cache_dir(folder=1)
 CFG_POOL_PATH = os.path.join(_BASE_DIR, "yaml", "cfg_pool.yaml")
 print_context(f"本项目策略文件路径：{CFG_POOL_PATH}")
@@ -139,8 +139,6 @@ config_pool = None  # 惰性初始化，不在import阶段加载
 
 
 def reset_temp_params_in_yaml(yaml_path: str = CFG_POOL_PATH):
-    # print_context(f"程序暂停自动平仓操作后将条件池中的temp_params参数回填业务！")
-    # return
     try:
         p = Path(yaml_path).resolve()
         print_context(f"📂 当前操作的yaml绝对路径：{p}")
@@ -159,6 +157,7 @@ def reset_temp_params_in_yaml(yaml_path: str = CFG_POOL_PATH):
             # 重置：临时止盈止损置空；冷却时间恢复默认5
             cfg["temp_params"]["temp_profit"] = None
             cfg["temp_params"]["temp_loss"] = None
+            cfg["change_future_code"] = shared_data.ts_code
             # cfg["temp_params"]["valid_trade_interval"] = 5  # 这里不能写回，因为我临时设置的目的就是在后阶段改变冷却时间间隔的
 
             with open(yaml_path, "w", encoding="utf-8") as f:
@@ -169,7 +168,7 @@ def reset_temp_params_in_yaml(yaml_path: str = CFG_POOL_PATH):
                 check_cfg = yaml.load(f) or {}
 
         print_context(f"✅写入后校验 temp_params：{check_cfg.get('temp_params')}")
-        print_context("✅开仓完成，已重置yaml中temp_params，恢复默认冷却时间")
+        # print_context("✅开仓完成，已重置yaml中temp_params，恢复默认冷却时间")
 
     except Exception as e:
         print_context(f"❌重置yaml temp_params失败: {str(e)}")
@@ -1205,6 +1204,8 @@ def order(ts_code=None):
 
 
 if __name__ == "__main__":
+    pass
+    exit()
     from core.connect_ths import local_control
 
     shared_data.ts_code = "c2701"

@@ -156,20 +156,6 @@ select_future_dict = {
     "nr": ["20号胶", 5800, "上能源", "INE"]
 }
 
-# trans_map ={
-#     'exchange': "交易所",
-#     'code': "英文名称",
-#     'name': "中文名称",
-# }
-#
-# def rename_dict_keys(src_dict, mapping=None):
-#     if mapping is None:
-#         mapping = trans_map
-#     new_dict = {}
-#     for old_key, val in src_dict.items():
-#         new_key = mapping.get(old_key, old_key)
-#         new_dict[new_key] = val
-#     return new_dict
 
 def get_future_info(symbol: str, trade_price=0) -> Dict[str, Any] | None:
     symbol = symbol.strip().lower()
